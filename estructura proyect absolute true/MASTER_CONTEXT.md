@@ -1,8 +1,8 @@
 # MASTER CONTEXT — Panel de Gestión de Turnos con IA
 
 > Copiar al inicio de cualquier conversación para recuperar contexto inmediato.
-> **Última actualización:** 2026-06-10
-> 🚀 **HITO: Infraestructura Base = ✅ COMPLETADA — 13 migraciones, 10 tablas, RLS activo**
+> **Última actualización:** 2026-06-11
+> 🚀 **HITO: FASE 2.2 SS-01/02/03 implementados — constants.ts, SupabaseCasoService, setCasoService(). 81/115 tareas (70%)**
 
 ---
 
@@ -12,7 +12,7 @@ Instituto Lavalle 11 es un centro de diagnóstico por imágenes en Bahía Blanca
 
 El proyecto construye un **panel web inteligente** que se interpone entre Callbell CRM y los asesores: cada mensaje entrante es analizado por **IA (provider-agnostic)** que extrae práctica, obra social, datos del paciente y flags de preparación; el caso aparece como card en el panel con todo pre-procesado; el asesor solo confirma fecha/hora y el sistema envía la respuesta a WhatsApp automáticamente.
 
-✅ **Fase 1, 1.5, 2.1 completadas.** Database Schema ✅, SQL Migrations ✅ (auditadas y corregidas), AI Architecture ✅ (auditada y aprobada). 🚀 **Infraestructura Base ✅ COMPLETADA — 13 migraciones ejecutadas, 10 tablas, RLS activo.** Frontend listo. **Próximo: FASE 2.1 — Supabase Auth (conectar a DB real).**
+✅ **Fase 1, 1.5, 2.1 completadas.** Database Schema ✅, SQL Migrations ✅ (auditadas y corregidas), AI Architecture ✅ (auditada y aprobada). 🚀 **Infraestructura Base ✅ — 13 migraciones ejecutadas, 10 tablas, RLS activo.** ✅ **FASE 2.1 — Auth real validado (env vars, login, GitHub).** 🚀 **FASE 2.2 — SS-01/02/03 implementados (3/7 = 43%).** 🎯 **Próximo: SS-04 — Migrar DashboardPage a useCasos().**
 
 ---
 
@@ -33,7 +33,7 @@ El proyecto construye un **panel web inteligente** que se interpone entre Callbe
 | Frontend | React 19 + Vite + Tailwind CSS v4 + TypeScript estricto | ✅ **Implementado + Refactorizado** |
 | Backend | Node.js 20 (Vercel Serverless Functions) | ⬜ Pendiente (Fase 2) |
 | Base de datos | Supabase (PostgreSQL + Realtime + Auth) | ✅ **Desplegada — 13 migraciones, 10 tablas, RLS activo** |
-| Auth | Supabase Auth (@supabase/supabase-js v2.108.1) | ✅ **Login real, logout, session, roles** |
+| Auth | Supabase Auth (@supabase/supabase-js v2.108.1) | ✅ **Login real — .env.local configurado, end-to-end validado** |
 | IA | Provider-agnostic (Claude, GPT, Gemini, DeepSeek) | ✅ **Arquitectura diseñada, auditada y aprobada** |
 | CRM | Callbell API (webhooks + Messages API) | ⬜ Pendiente (post-Fase 2) |
 | Config | Google Sheets API | ⬜ Pendiente (Fase 3) |
@@ -56,8 +56,9 @@ El proyecto construye un **panel web inteligente** que se interpone entre Callbe
 | Fase 4 — Acciones asesor | ⬜ | Post-Fase 3 |
 | Fase 5 — Métricas | ⬜ | Post-Fase 4 |
 | 🚀 **Infraestructura Base** | ✅ **100%** | **10/10 migraciones ejecutadas en Supabase** |
-| Fase 2 — Backend + Webhook | ⏳ | Pendiente — primero Auth (conectar a DB real) |
-| **Progreso total** | **71%** | **77/109 tareas completadas** |
+| 🔜 **FASE 2.1 — Auth (DB real)** | ✅ **100%** | **Auth validado. Env vars configuradas. Git/GitHub conectado** |
+| 🚀 **FASE 2.2 — SupabaseApiService** | 🚀 **43%** | **3/7 tareas: SS-01 constants.ts ✅, SS-02 SupabaseCasoService ✅, SS-03 setCasoService() ✅** |
+| **Progreso total** | **70%** | **81/115 tareas completadas** |
 
 ---
 
@@ -72,7 +73,9 @@ El proyecto construye un **panel web inteligente** que se interpone entre Callbe
 7. **RIS:** Sin integración con IT SOS en v1 — el asesor registra manualmente
 8. **NO implementar Claude Adapter todavía** — priorizar Supabase, migraciones, Auth y Realtime antes que Callbell e IA
 9. **Orden de prioridad cumplido:** 🚀 Supabase (proyecto + migraciones) ✅ COMPLETADO → ahora Auth (conectar a DB real) → Realtime → Callbell → IA
-10. **Próximo hito inmediato:** 🔜 **FASE 2.1 — Supabase Auth: configurar .env.local con credenciales reales, crear usuarios, verificar login**
+10. ✅ **FASE 2.1 completada** — Auth real validado
+11. 🚀 **FASE 2.2 SS-01/02/03 completados** — 3/7 tareas
+12. 🎯 **Próximo hito inmediato:** **SS-04 — Migrar DashboardPage a useCasos()**
 
 ---
 
@@ -172,12 +175,16 @@ Formato del link: https://misrx.com.ar/prestacion?token=<uuid>
 ## Próximos Pasos (Priorizados)
 
 1. 🚀 **✅ Crear proyecto Supabase + migraciones 001–013** — COMPLETADO
-2. **🎯 FASE 2.1 — Supabase Auth:** Configurar .env.local con credenciales reales
-3. Crear usuarios en Supabase Auth (Franco, Brenda, Catalina, Macarena)
-4. Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-5. **Fase 2.2:** Implementar SupabaseApiService (CasoService real) + conectar hooks
-6. **Fase 2.3:** Endpoint webhook Callbell + Realtime
-7. **Fase 3:** Implementar ClaudeAdapter (con O-01, O-02, O-03 mandatory)
+2. ✅ **FASE 2.1 — Supabase Auth:** .env.local, login validado, GitHub conectado
+3. ✅ Crear usuarios en Supabase Auth (Franco, Brenda, Catalina, Macarena)
+4. ✅ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
+5. ✅ **FASE 2.2 — SS-01/SS-02/SS-03 implementados:** constants.ts, SupabaseCasoService, setCasoService()
+6. 🎯 **SS-04 — Migrar DashboardPage a useCasos()**
+7. 🎯 **SS-05 — Migrar MetricsBoard a useMetricas()**
+8. 🎯 **SS-06 — Verificar filtrado RLS**
+9. 🎯 **SS-07 — Compilación + verificación visual**
+10. ⬜ **Fase 2.3:** Endpoint webhook Callbell + Realtime
+11. ⬜ **Fase 3:** Implementar ClaudeAdapter (con O-01, O-02, O-03 mandatory)
 
 ---
 
@@ -185,11 +192,11 @@ Formato del link: https://misrx.com.ar/prestacion?token=<uuid>
 
 | Archivo | Contenido |
 |---|---|
-| `PROJECT_STATE.md` | Estado completo del proyecto (109 tareas, 77 completadas = 71%) |
+| `PROJECT_STATE.md` | Estado completo del proyecto (115 tareas, 81 completadas = 70%) + sección 12 con auditoría FASE 2.2 + progreso SS-01/02/03 |
 | `ARCHITECTURE.md` | Arquitectura detallada + 12 diagramas Mermaid |
 | `DECISIONS.md` | 8 ADRs con justificación |
-| `TODO.md` | Plan de trabajo completo con 109 tareas en 8 fases + 3 secciones adicionales |
-| `SESSION_LOG.md` | 7 sesiones registradas |
+| `TODO.md` | Plan de trabajo completo con 115 tareas en 10 secciones |
+| `SESSION_LOG.md` | 10 sesiones registradas |
 | `docs/core/AI_PROVIDER_ARCHITECTURE.md` | Arquitectura provider-agnostic de IA (aprobada con auditoría) |
 | `database/migrations/` | 13 migraciones SQL auditadas y corregidas |
 | `database/DATABASE_SCHEMA.md` | 9 tablas, 22 ENUMs, esquema completo |

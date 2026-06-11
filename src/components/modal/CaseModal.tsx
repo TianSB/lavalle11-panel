@@ -12,7 +12,7 @@ import { SelectorHora } from "./SelectorHora";
 import { ListaInstrucciones } from "./ListaInstrucciones";
 import { VistaPreviaMensaje } from "./VistaPreviaMensaje";
 import { FormSeguimiento } from "./FormSeguimiento";
-import { TIPOS_CASO } from "../../data/mockCases";
+import { TIPOS_CASO } from "../../constants";
 import { formatDateTime } from "../../utils/dates";
 
 interface CaseModalProps {

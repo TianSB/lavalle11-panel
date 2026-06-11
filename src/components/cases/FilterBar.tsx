@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { EstadoCaso, Prioridad, TipoCaso } from "../../types";
-import { TIPOS_CASO } from "../../data/mockCases";
+import { TIPOS_CASO } from "../../constants";
 
 interface FilterBarProps {
   onSearchChange: (query: string) => void;

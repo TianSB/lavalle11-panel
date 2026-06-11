@@ -1,4 +1,4 @@
-import { TIPOS_CASO } from "../../data/mockCases";
+import { TIPOS_CASO } from "../../constants";
 
 type VistaActiva = "cola" | "bandeja" | "seguimientos" | "metricas";
 

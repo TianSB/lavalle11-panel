@@ -149,18 +149,38 @@
 
 ---
 
-## Fase 2 — Backend y Webhook de Callbell
+## Fase 2.2 — SupabaseApiService 🎯
 
-> **Prioridad actualizada:** InfraBase ✅ → Auth (conectar a DB real) → SupabaseApiService → Realtime → Callbell webhook → IA (Fase 3). Claude Adapter postergado.
-> **🎯 Próximo hito:** FASE 2.1 — Supabase Auth: configurar .env.local con credenciales reales, crear usuarios, verificar login end-to-end.
+> **Prioridad actualizada:** InfraBase ✅ → Auth (DB real) ✅ → **🎯 FASE 2.2: SupabaseApiService** → Realtime → Callbell → IA.
+> **🎯 Próximo hito:** FASE 2.2 — Reemplazar progresivamente los mocks por consultas reales a Supabase.
+
+**Objetivo:** El panel consulta datos reales de Supabase. Mocks reemplazados manteniendo UI y compatibilidad.
+
+| # | Tarea | Estado | Sesión | Notas | Esfuerzo |
+|---|---|---|---|---|---|
+| SS-01 | Extraer TIPOS_CASO a `src/constants.ts` | ✅ | 10 | Sidebar, FilterBar y CaseModal importan esta constante de mockCases.ts | 🔵 Bajo |
+| SS-02 | Crear `SupabaseCasoService` implementando `CasoService` | ✅ | 10 | `src/services/supabaseService.ts` (nuevo). Usa cliente anon, respeta RLS | 🔴 Alto (~100 líneas) |
+| SS-03 | Wirear `setCasoService()` al inicio de la app | ✅ | 10 | `App.tsx` — 2 líneas al inicio del módulo | 🟢 Mínimo |
+| SS-04 | Migrar DashboardPage: useCasos() en lugar de MOCK_CASOS | ✅ | 11 | Refactor de filtrado en useMemo, stats desde estado reactivo. Loading state. TypeScript 0 errores | 🔴 Alto |
+| SS-05 | Migrar MetricsBoard: useMetricas() en lugar de mock directo | ✅ | 11 | useMetricas() refactor: deriva de useCasos() con useMemo. MetricsBoard con null safety + loading. 0 calls extra a Supabase | 🟡 Medio |
+| SS-06 | Auditoría de seguridad RLS — validar políticas y fuga cross-user | ✅ | 11 | 10/10 tablas con RLS. 🟢 OK. Sin fugas. 3 recomendaciones doc. SQL fixes opcionales | 🟡 Medio |
+| SS-07 | Compilación TypeScript + verificación visual + vercel.json + error fix | ✅ | 11 | TypeScript 0 errores ✅. Vite build OK (135KB gzip). vercel.json creado. Error banner en DashboardPage | 🟢 Mínimo |
+
+**No implementar en FASE 2.2:** Realtime · Callbell webhook · Claude IA · Procesamiento imágenes
+
+**Trabajo adicional en SS-07:**
+- `vercel.json` creado con configuración Vite SPA (buildCommand, outputDirectory, rewrites)
+- Fix de error handling en DashboardPage: banner rojo + separación loading/error/empty states
+
+---
+
+## Fase 2 (restante) — Backend y Webhook de Callbell
 
 **Objetivo:** El panel recibe casos reales de Callbell en tiempo real.
 
 | # | Tarea | Estado | Sesión | Notas |
 |---|---|---|---|---|
-| 2.1 | **Supabase Auth — conectar a DB real** | ⬜ | — | Configurar .env.local con SUPABASE_URL y ANON_KEY reales |
-| 2.2 | Implementar SupabaseApiService + conectar hooks | ⬜ | — | Reemplazar mockCasoService por implementación real |
-| 2.3 | Crear endpoint `/api/callbell/webhook` en Vercel | ⬜ | — | — |
+| 2.3 | Crear endpoint `/api/callbell/webhook` en Vercel | ⬜ | — | Endpoint ya existe, pendiente de deploy |
 | 2.4 | Implementar validación de firma de webhook | ⬜ | — | HMAC-SHA256 |
 | 2.5 | Procesar evento `message_created` | ⬜ | — | Parseo de payload |
 | 2.6 | Crear registros en Supabase (tabla `casos`) | ⬜ | — | Datos crudos |
@@ -220,7 +240,7 @@
 
 ---
 
-## Mejoras Futuras (Post-MVP)
+
 
 | # | Descripción | Prioridad | Planificado para |
 |---|---|---|---|
@@ -242,8 +262,9 @@
 | Fase 2.1 — Supabase Auth (cliente) | 12 | 12 | 0 | 0 | **100%** |
 | **Diseño AI Architecture** | **14** | **14** | **0** | **0** | **100%** |
 | **🚀 Infraestructura Base** | **10** | **10** | **0** | **0** | **100%** |
-| Fase 2 — Backend + Webhook | 9 | 0 | 0 | 9 | 0% |
+| **🚀 Fase 2.2 — SupabaseApiService** | **7** | **7** | **0** | **0** | **100%** |
+| Fase 2 (restante) — Backend + Webhook | 7 | 0 | 0 | 7 | 0% |
 | Fase 3 — Claude IA | 10 | 0 | 0 | 10 | 0% |
 | Fase 4 — Acciones | 7 | 0 | 0 | 7 | 0% |
 | Fase 5 — Métricas | 6 | 0 | 0 | 6 | 0% |
-| **Total** | **109** | **77** | **0** | **32** | **71%** |
+| **Total** | **115** | **85** | **0** | **30** | **74%** |

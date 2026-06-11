@@ -566,3 +566,264 @@ Se creó el proyecto en Supabase y se ejecutaron las 13 migraciones SQL en orden
 - 🚀 **✅ Infraestructura Base completada** — 13 migraciones, 10 tablas, RLS activo
 - ✅ AI Architecture aprobado | Migraciones corregidas | Documentación consolidada
 - **77/109 tareas (71%)**
+
+---
+
+## Sesión 9 — 2026-06-11 — Auditoría Técnica y Planificación FASE 2.2
+
+**Objetivo:** Auditar el estado actual del código, verificar qué partes siguen usando mockCases.ts, identificar puntos de integración para SupabaseApiService, proponer plan técnico detallado para FASE 2.2, y actualizar documentación.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, code-reviewer-deepseek-flash, file-picker, code-searcher
+
+### Resumen
+
+Se realizó una auditoría técnica completa del frontend para planificar la FASE 2.2 (reemplazo de mocks por consultas reales a Supabase):
+
+1. **Contexto sincronizado:** Se leyeron los 4 archivos maestros (MASTER_CONTEXT.md, PROJECT_STATE.md, TODO.md, SESSION_LOG.md) y se integraron los hitos completados post-Sesión 8: Git/GitHub conectado, variables de entorno configuradas, Auth real validado end-to-end.
+
+2. **Auditoría de mockCases.ts:** Se identificaron 6 archivos con dependencias directas del archivo mockCases.ts:
+   - 🔴 **2 críticos:** `DashboardPage.tsx` (usa MOCK_CASOS para filtrado y stats) y `MetricsBoard.tsx` (usa MOCK_METRICAS, MOCK_CASOS_POR_TIPO, MOCK_VOLUMEN_DIARIO directamente)
+   - 🟢 **3 de display:** `Sidebar.tsx`, `FilterBar.tsx` y `CaseModal.tsx` solo importan la constante `TIPOS_CASO` (sin datos), fácilmente extraíble a `src/constants.ts`
+   - 🟡 **1 de servicio:** `mockService.ts` que será reemplazada por la implementación real
+
+3. **Arquitectura de servicios evaluada:**
+   - `CasoService` interface: ✅ **Lista** con 10 métodos
+   - `setCasoService()`: ✅ **Listo** para swap en runtime
+   - `useCasos()`, `useCasosPorAsesor()`, `useMetricas()`: ✅ **Listos** pero **no se usan** — DashboardPage y MetricsBoard aún importan datos mock directamente
+   - `src/services/supabase/casoService.ts`: ✅ **Existe** pero es server-side (usa cliente admin, bypass RLS). No sirve para frontend.
+
+4. **Brechas identificadas:** 5 brechas documentadas con impacto y solución propuesta
+
+5. **Plan FASE 2.2 elaborado:** 7 tareas (SS-01 a SS-07) con esfuerzo estimado, archivos afectados y estrategia de migración
+   - SS-01: Extraer TIPOS_CASO a `src/constants.ts` 🔵 Bajo
+   - SS-02: Crear SupabaseCasoService implementando CasoService 🔴 Alto
+   - SS-03: Wirear setCasoService() en bootstrap 🟢 Mínimo
+   - SS-04: Migrar DashboardPage a useCasos() 🔴 Alto
+   - SS-05: Migrar MetricsBoard a useMetricas() 🟡 Medio
+   - SS-06: Asegurar filtrado RLS por auth.uid() 🟡 Medio
+   - SS-07: Compilación + verificación visual 🟢 Mínimo
+
+### Hitos Reconocidos
+
+| Hito | Estado |
+|---|---|
+| Git/GitHub conectado (`git@github.com:TianSB/lavalle11-panel.git`) | ✅ COMPLETADO (post-Sesión 8) |
+| Variables de entorno configuradas (.env.local + Vercel) | ✅ COMPLETADO |
+| Auth real validado (login end-to-end, dashboard OK) | ✅ COMPLETADO |
+| **FASE 2.2 planificada** — 7 tareas con análisis de brechas | 🎯 **PLANIFICADO** |
+
+### Archivos Modificados (4)
+
+| Archivo | Cambio |
+|---|---|
+| `PROJECT_STATE.md` | Nueva sección 12 con auditoría completa (6 hallazgos, 5 brechas, 7 tareas, riesgos). Stack actualizado. Próximos pasos re-numerados. Conteo: 115/78 (68%) |
+| `TODO.md` | Nueva sección "Fase 2.2 — SupabaseApiService" con 7 tareas SS-01 a SS-07. Fase 2 re-estructurada (eliminado 2.2 de lista anterior, re-numerado). Tabla de progreso actualizada: 115 totales, 78 completadas (68%) |
+| `SESSION_LOG.md` | Esta entrada (Sesión 9) — auditoría, plan, decisiones |
+| `MASTER_CONTEXT.md` | Estado actualizado, Auth marcado como validado, FASE 2.2 como próximo hito, conteo actualizado |
+
+### Decisiones Tomadas
+
+| Decisión | Alternativa | Razón |
+|---|---|---|
+| **Extraer TIPOS_CASO a constants.ts** (SS-01) | Dejarlo en mockCases.ts y que los componentes sigan importando de ahí | 3 componentes UI (Sidebar, FilterBar, CaseModal) importan solo la constante — no necesitan mock data. Romper esa dependencia es requisito para eliminar mocks |
+| **SupabaseCasoService usa cliente anon** | Usar cliente service-role (bypass RLS) | RLS está diseñado para filtrar por asesor_id. El cliente anon respeta la seguridad por fila. Service-role es para server-side (webhook) |
+| **setCasoService() en bootstrap** | Por lazy import en cada componente | Un solo punto de inicialización, swap controlado. Los hooks ya están diseñados para esto |
+| **mockCases.ts y mockService.ts se mantienen como respaldo** | Eliminar inmediatamente | Permitir rollback rápido durante la migración. Se marcan como @deprecated después de verificación |
+| **Admin ve todos los casos en SupabaseCasoService** | Admin usa el mismo filtro RLS | Las políticas RLS 013_rls.sql permiten a administradores ver todos los casos. El servicio debe detectar el rol y ajustar la query |
+| **No implementar Realtime, Callbell ni IA en FASE 2.2** | Incluir Realtime ahora | Scope limitado al reemplazo de mocks. Realtime requiere setup adicional y es Fase 2.3 |
+
+### Riesgos Identificados
+
+| Riesgo | Mitigación |
+|---|---|
+| Las consultas RLS con cliente anon pueden devolver datos incompletos si las políticas no cubren todos los escenarios | Verificar políticas en 013_rls.sql antes de implementar SS-02 |
+| El admin necesita ver todos los casos pero RLS filtra por asesor_id | La política RLS ya incluye excepción para administradores (bypass RLS) — verificar en la migración 013 |
+| useCasosPorAsesor() recibe un parámetro `asesorId` que podría ser inseguro | Reemplazar por `auth.uid()` directamente en la consulta — el hook debe ser seguro por diseño |
+| DashboardPage tiene lógica de filtrado acoplada a MOCK_CASOS | El refactor (SS-04) debe mantener la misma UI y comportamiento. El estado local de filtros se conserva |
+
+### Pendientes para la Próxima Sesión
+
+- [ ] **🎯 FASE 2.2 — SS-01:** Extraer TIPOS_CASO a `src/constants.ts`
+- [ ] **SS-02:** Crear SupabaseCasoService implementando CasoService
+- [ ] **SS-03:** Wirear setCasoService() en App.tsx
+- [ ] **SS-04:** Migrar DashboardPage a useCasos() hook
+- [ ] **SS-05:** Migrar MetricsBoard a useMetricas() hook
+- [ ] **SS-06:** Asegurar filtrado RLS por auth.uid()
+- [ ] **SS-07:** Compilación TypeScript + verificación visual
+
+### Estado al Cierre
+
+- 🚀 **✅ Auditoría técnica completada** — 6 archivos con dependencias de mock identificados, 5 brechas, 7 tareas planificadas
+- ✅ FASE 2.1 — Auth real validado (DB, login, dashboard, GitHub)
+- ✅ Git/GitHub conectado | Env vars configuradas
+- **78/115 tareas (68%)** — FASE 2.2 lista para implementar
+
+---
+
+## Sesión 10 — 2026-06-11 — Implementación FASE 2.2: SS-01, SS-02, SS-03
+
+**Objetivo:** Implementar las primeras 3 tareas de FASE 2.2: extraer TIPOS_CASO a constants.ts, crear SupabaseCasoService, y wirear setCasoService() en App.tsx. Sin tocar DashboardPage ni MetricsBoard.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, code-reviewer-deepseek-flash
+
+### Resumen
+
+Se implementaron las 3 primeras tareas del plan FASE 2.2 (sesión 9), reemplazando progresivamente los datos mock por consultas reales a Supabase sin cambiar UI ni romper compatibilidad:
+
+1. **SS-01: Extraer TIPOS_CASO a `src/constants.ts`** — Se creó el archivo compartido con el `Record<TipoCaso, string>` de labels. Se actualizaron los imports en 3 componentes: `Sidebar.tsx`, `FilterBar.tsx` y `CaseModal.tsx`. El archivo `mockCases.ts` mantiene su propia copia de `TIPOS_CASO` como respaldo.
+
+2. **SS-02: Crear SupabaseCasoService** — Se creó `src/services/supabaseService.ts` con la implementación completa de los 10 métodos de `CasoService` usando el cliente anon de Supabase:
+   - `getCasos()`, `getCasosByAsesor()`, `getCasosConSeguimiento()` con joins a `extracciones_ia`, `turnos`, `llamadas` y `usuarios` (para asesor_nombre)
+   - `getMetricasResumen()` con 5 consultas COUNT en paralelo
+   - `getCasosPorTipo()` con agregación en JS y labels desde `TIPOS_CASO`
+   - `getVolumenDiario()` con agregación diaria en JS
+   - `getUsuarios()`, `asignarCaso()`, `cerrarCaso()`, `enviarMensaje()`
+   - Manejo de casos sin `extraccion_ia` con fallback "Pendiente de análisis"
+
+3. **SS-03: Wirear setCasoService()** — Se agregó `setCasoService(supabaseCasoService)` al inicio del módulo `App.tsx`, ejecutándose antes de que cualquier monte la app y los hooks consuman el servicio activo.
+
+4. **TypeScript compilation:** 0 errores.
+
+5. **Code review:** Se reemplazó un `await import("../constants")` dinámico por un import al tope del archivo, según recomendación del revisor.
+
+### Archivos Creados (2 nuevos)
+
+| Archivo | Propósito |
+|---|---|
+| `src/constants.ts` | TIPOS_CASO compartido (labels para tipos A-K) |
+| `src/services/supabaseService.ts` | SupabaseCasoService — implementación real de CasoService con anon client |
+
+### Archivos Modificados (4)
+
+| Archivo | Cambio |
+|---|---|
+| `src/components/layout/Sidebar.tsx` | Import de TIPOS_CASO desde `../../constants` en lugar de `../../data/mockCases` |
+| `src/components/cases/FilterBar.tsx` | Import de TIPOS_CASO desde `../../constants` |
+| `src/components/modal/CaseModal.tsx` | Import de TIPOS_CASO desde `../../constants` |
+| `src/App.tsx` | `setCasoService(supabaseCasoService)` al inicio del módulo |
+
+### Decisiones Tomadas
+
+| Decisión | Alternativa | Razón |
+|---|---|---|
+| **setCasoService() al nivel del módulo** en App.tsx | Dentro de un useEffect o en main.tsx | Se ejecuta antes de cualquier render. Los hooks (que se montan en efectos) ya encuentran el servicio real. No hay race conditions |
+| **SupabaseCasoService usa cliente anon** (`src/lib/supabase.ts`) | Usar cliente service-role (bypass RLS) | RLS está diseñado para filtrar por asesor_id y rol. El cliente anon respeta la seguridad por fila. Service-role es para server-side (webhook) |
+| **Import al tope de TIPOS_CASO** en supabaseService.ts | Import dinámico dentro del método | Sugerencia del code review. Más legible, misma funcionalidad |
+| **mockCases.ts y mockService.ts se mantienen** | Eliminar inmediatamente | Respaldo para rollback rápido. Se marcarán como @deprecated después de SS-07 |
+| **getMetricasResumen con 5 consultas COUNT en paralelo** | Una sola consulta con agregación SQL | Promise.all ejecuta en paralelo. Más simple que RPCs. Aceptable para el volumen actual |
+| **getVolumenDiario con agregación en JS** | COUNT con GROUP BY via RPC | Simple y suficiente. Se puede optimizar a RPC si hay problemas de performance |
+| **getCasosPorTipo con import de TIPOS_CASO** | Mapeo hardcodeado | Reusa la fuente de verdad única de labels. Cualquier cambio futuro en tipos se refleja automáticamente |
+| **enviarMensaje no implementado** (console.log) | Implementar con Callbell API | Depende de Fase 4. Por ahora es un placeholder consistente con el mockService que también era no-op |
+
+### Riesgos y Mitigaciones
+
+| Riesgo | Mitigación |
+|---|---|
+| Las consultas COUNT en getMetricasResumen cuentan TODOS los casos visibles por RLS (admin ve todos, asesor solo los suyos) | ✅ Comportamiento correcto por diseño. El admin ve métricas globales, el asesor solo las propias |
+| getCasosConSeguimiento() usa dos queries (seguimientos → casos) | ✅ Los seguimientos pendientes son pocos. El impacto en performance es mínimo |
+| DashboardPage y MetricsBoard aún usan datos mock directamente | ✅ No se tocaron. Siguiente paso: SS-04 y SS-05 |
+
+### Pendientes para la Próxima Sesión
+
+- [ ] **SS-04:** Migrar DashboardPage a useCasos() hook
+- [ ] **SS-05:** Migrar MetricsBoard a useMetricas() hook
+- [ ] **SS-06:** Asegurar filtrado RLS por auth.uid()
+- [ ] **SS-07:** Compilación + verificación visual completa
+
+### Estado al Cierre
+
+- ✅ **SS-01 completado** — TIPOS_CASO en constants.ts, 3 componentes actualizados
+- ✅ **SS-02 completado** — SupabaseCasoService con 10 métodos implementados
+- ✅ **SS-03 completado** — setCasoService() wireado en App.tsx
+- ✅ FASE 2.1 — Auth real validado
+- ✅ TypeScript 0 errores | Code review: 1 mejora aplicada
+- **81/115 tareas (70%)** — FASE 2.2: 3/7 completadas
+
+---
+
+## Sesión 11 — 2026-06-11 — FASE 2.2 Completa: SS-04 a SS-07 + Auditoría + Deploy Readiness
+
+**Objetivo:** Completar FASE 2.2 en su totalidad: migrar DashboardPage y MetricsBoard a hooks reales, auditar seguridad RLS, validar readiness de deploy, y crear configuración para Vercel.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, code-reviewer-deepseek-flash, basher (build), code-searcher (mock audit)
+
+### Resumen
+
+Se completaron las 4 tareas restantes de FASE 2.2, finalizando la migración completa de mocks a datos reales:
+
+1. **SS-04: Migrar DashboardPage a useCasos()** — Se reemplazó `MOCK_CASOS` por `useCasos()` hook. El filtrado en `useMemo` ahora opera sobre `allCasos` del hook. Stats derivados desde datos reales. Se agregó loading state con spinner. TypeScript 0 errores.
+
+2. **SS-05: Migrar MetricsBoard a useMetricas()** — Se refactorizó el hook `useMetricas()` para que derive métricas desde `useCasos()` usando 3 bloques `useMemo` (resumen, porTipo, volumenDiario), eliminando 3 calls extra a Supabase. Se actualizó MetricsBoard para importar desde el hook con null safety y loading state. TypeScript 0 errores.
+
+3. **SS-06: Auditoría de seguridad RLS** — Se auditaron las 13 políticas RLS, el sistema de roles (`auth_rol()`, trigger sync), y se verificaron 4 escenarios de fuga cross-user. Resultado: 🟢 **OK**. Sin fugas críticas. 3 recomendaciones menores (2 para v1 backlog, 1 para Fase 4). SQL fixes opcionales para `casos_insert_policy` y `extracciones_insert_policy`.
+
+4. **SS-07: Deployment Readiness Review** — Se validó: build de TypeScript 0 errores ✅, build de Vite exitoso (482KB JS, 135KB gzip) ✅, 0 dependencias de mock en componentes ✅, loading states en toda la UI ✅. Se creó `vercel.json` con configuración estándar para Vite SPA. Se aplicó fix de error handling en DashboardPage (banner rojo con separación de estados loading/error/empty).
+
+### Archivos Creados (1 nuevo)
+
+| Archivo | Propósito |
+|---|---|
+| `vercel.json` | Configuración de Vercel para Vite SPA (buildCommand, outputDirectory, rewrites SPA) |
+
+### Archivos Modificados (5)
+
+| Archivo | Cambio |
+|---|---|
+| `src/pages/DashboardPage.tsx` | SS-04: `MOCK_CASOS` → `useCasos()` + loading state + error banner con separación de estados |
+| `src/hooks/useCasos.ts` | SS-05: `useMetricas()` refactor — deriva desde `useCasos()` con 3 `useMemo` blocks, 0 network calls extra |
+| `src/components/metrics/MetricsBoard.tsx` | SS-05: `MOCK_*` → `useMetricas()` + null safety + loading state + `.slice(-7)` en volumen diario |
+
+### Decisiones Tomadas
+
+| Decisión | Alternativa | Razón |
+|---|---|---|
+| **useMetricas() deriva de useCasos()** en vez de llamar al servicio | 3 calls separadas a Supabase | 0 network calls extra, datos siempre sincronizados, misma lógica de agregación. Las métricas se computan del lado cliente sobre datos ya cargados |
+| **Error banner no intrusivo** (banner rojo arriba del contenido) | Modal de error / pantalla completa | El asesor puede seguir viendo datos stale mientras se corrige el error. No pierde contexto de trabajo |
+| **Spinner condicional: `isLoading && !error && empty`** | Spinner cuando isLoading solo | Evita que el spinner compita con el banner de error. Si hay error, el usuario ve el banner, no el spinner |
+| **`!error || hasData ? CaseGrid : null`** en la lógica de render | Siempre mostrar CaseGrid | Cuando hay error y no hay datos, no se debe mostrar el empty state de CaseGrid (confunde al usuario: "no hay casos" vs "error al cargar") |
+| **vercel.json con rewrites SPA** (`/(.*)` → `/index.html`) | Sin rewrites | Aunque el proyecto no usa React Router hoy, el catch-all prepara el deploy para cualquier ruta futura. Es estándar en SPAs |
+| **Bundle 135KB gzip** aceptable | Optimizar con lazy loading | Para un panel interno con pocos usuarios, 135KB es aceptable. Optimización postergable |
+| **mockService.ts se mantiene como respaldo** | Eliminar | El warning de build (mockCases.ts importado estática y dinámicamente) es inocuo. Se marcará como @deprecated en una limpieza futura |
+
+### Auditoría RLS — Resumen
+
+| Verificación | Resultado |
+|---|---|
+| 10 tablas con RLS habilitado | ✅ 10/10 |
+| `casos_select_policy`: asesor ve sus casos + sin asignar; admin ve todo | ✅ Correcta |
+| `casos_insert_policy`: permite INSERT sin restringir asesor_id | ⚠️ Riesgo bajo (los casos se crean vía webhook) |
+| Tablas relacionadas heredan visibilidad del caso padre | ✅ Correcto (7 tablas) |
+| Función `auth_rol()` + `SECURITY DEFINER` | ✅ Sin riesgo de spoofing |
+| Frontend solo renderiza lo que RLS ya filtró | ✅ Sin filtrado de seguridad en cliente |
+| Cross-user leakage (4 escenarios) | ❌ No detectable |
+| **Nivel general** | 🟢 **OK** |
+
+### SS-07 Deployment Readiness — Checklist
+
+| Ítem | Resultado |
+|---|---|
+| `npx tsc -b --noEmit` | ✅ 0 errores |
+| `npx vite build` | ✅ Exitoso (935ms) |
+| Bundle JS (gzip) | 135.19 kB ✅ |
+| Bundle CSS (gzip) | 7.11 kB ✅ |
+| Sin imports de MOCK_* en componentes | ✅ Verificado |
+| `setCasoService()` wireado antes de fetch | ✅ Confirmado |
+| `.env.local` en `.gitignore` | ✅ Excluido |
+| Loading states en todos los componentes | ✅ DashboardPage + MetricsBoard |
+| Manejo de errores: banner separado | ✅ DashboardPage |
+| `vercel.json` presente | ✅ Creado |
+
+### Pendientes para la Próxima Sesión
+
+- [ ] **Fase 2.3:** Endpoint webhook Callbell + Realtime
+- [ ] **Fase 3:** Implementar ClaudeAdapter (con O-01, O-02, O-03 mandatory)
+- [ ] Configurar variables de entorno `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel Dashboard
+- [ ] Marcar `mockService.ts` y `mockCases.ts` como `@deprecated` en limpieza técnica
+
+### Estado al Cierre
+
+- ✅ **FASE 2.2 COMPLETA (7/7 tareas, 100%)** — SS-01 a SS-07 implementados y validados
+- ✅ SS-04: DashboardPage con useCasos() | SS-05: MetricsBoard con useMetricas()
+- ✅ SS-06: RLS auditado (🟢 OK) | SS-07: Deploy readiness (✅ build, ✅ vercel.json, ✅ error fix)
+- ✅ TypeScript 0 errores | Build exitoso | 85/115 tareas (74%)
+- 🚀 **Sistema completamente migrado de mocks a datos reales — listo para deploy en Vercel**

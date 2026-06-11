@@ -2,6 +2,11 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ToastContainer } from "./components/ui/Toast";
+import { setCasoService } from "./hooks/useCasos";
+import { supabaseCasoService } from "./services/supabaseService";
+
+// Switch from mock service to real Supabase service
+setCasoService(supabaseCasoService);
 
 function LoadingScreen() {
   return (

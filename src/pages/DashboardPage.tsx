@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import type { Caso, EstadoCaso, Prioridad, TipoCaso } from "../types";
-import { MOCK_CASOS } from "../data/mockCases";
+import { useCasos } from "../hooks/useCasos";
 import { useAuth } from "../context/AuthContext";
 import { AppLayout } from "../components/layout/AppLayout";
 import { FilterBar } from "../components/cases/FilterBar";
@@ -19,11 +19,12 @@ export function DashboardPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoCaso | "todas">("todas");
   const [selectedCaso, setSelectedCaso] = useState<Caso | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { casos: allCasos, isLoading, error } = useCasos();
 
   if (!user) return null;
 
   const casosFiltrados = useMemo(() => {
-    let casos = [...MOCK_CASOS];
+    let casos = [...allCasos];
 
     // Filter by view
     if (vistaActiva === "bandeja") {
@@ -70,7 +71,7 @@ export function DashboardPage() {
     });
 
     return casos;
-  }, [vistaActiva, searchQuery, filtroEstado, filtroPrioridad, filtroTipo, user.id]);
+  }, [allCasos, vistaActiva, searchQuery, filtroEstado, filtroPrioridad, filtroTipo, user.id]);
 
   const handleCaseClick = (caso: Caso) => {
     setSelectedCaso(caso);
@@ -83,10 +84,10 @@ export function DashboardPage() {
   };
 
   // Stats for layout
-  const totalCasos = MOCK_CASOS.filter((c) => c.estado !== "cerrado").length;
-  const pendientes = MOCK_CASOS.filter((c) => c.estado === "pendiente").length;
-  const misCasos = MOCK_CASOS.filter((c) => c.asesor_id === user.id && c.estado !== "cerrado").length;
-  const seguimientosPendientes = MOCK_CASOS.filter(
+  const totalCasos = allCasos.filter((c) => c.estado !== "cerrado").length;
+  const pendientes = allCasos.filter((c) => c.estado === "pendiente").length;
+  const misCasos = allCasos.filter((c) => c.asesor_id === user.id && c.estado !== "cerrado").length;
+  const seguimientosPendientes = allCasos.filter(
     (c) => c.seguimiento_fecha !== null && c.estado !== "cerrado",
   ).length;
 
@@ -132,6 +133,16 @@ export function DashboardPage() {
             </p>
           </div>
 
+          {/* Error banner */}
+          {error && (
+            <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <svg className="h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Error al cargar datos: {error}</span>
+            </div>
+          )}
+
           <FilterBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
@@ -145,7 +156,19 @@ export function DashboardPage() {
             }}
           />
 
-          <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} />
+          {isLoading && !error && casosFiltrados.length === 0 ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <svg className="h-8 w-8 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <p className="text-sm text-gray-500">Cargando casos...</p>
+              </div>
+            </div>
+          ) : !error || casosFiltrados.length > 0 ? (
+            <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} />
+          ) : null}
 
           <CaseModal
             caso={selectedCaso}

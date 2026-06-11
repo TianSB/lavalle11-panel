@@ -1,8 +1,8 @@
 # PROJECT STATE — Panel de Gestión de Turnos con IA
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
-> Última actualización: 2026-06-10
-> 🚀 **HITO: Base de datos desplegada en Supabase — 13 migraciones ejecutadas, 10 tablas operativas, RLS activo**
+> Última actualización: 2026-06-11
+> 🚀 **HITO: FASE 2.2 COMPLETA (100%) — Sistema migrado de mocks a datos reales. RLS auditado (🟢 OK). Listo para deploy en Vercel. 85/115 tareas (74%).**
 
 ---
 
@@ -15,16 +15,17 @@
 | Cliente | Instituto Lavalle 11 / Gamma Laboratorios |
 | Autor PRD | RIA · r-ia.vercel.app |
 | Stack | React + Vite + Tailwind / Node.js Serverless / Supabase + Auth / Claude API / Callbell API |
-| Repositorio | (por definir) |
+| Repositorio | `git@github.com:TianSB/lavalle11-panel.git` |
 
 ## 2. Fase Actual
 
-**Hito completado:** 🚀 **Infraestructura Base = ✅ COMPLETADA**
-_13 migraciones ejecutadas · 10 tablas visibles · RLS desplegado · Consultas SELECT validadas_
+**Hito completado:** 🚀 **FASE 2.2 — SupabaseApiService: COMPLETA (7/7, 100%)**
+_SS-01 a SS-07 implementados: constants.ts, SupabaseCasoService, setCasoService(), DashboardPage migrado, MetricsBoard migrado, RLS auditado, deploy readiness validado_
 
-**Siguiente fase:** 🔜 **FASE 2.1 — Supabase Auth** (conectar login real a la base de datos desplegada: configurar .env.local con credenciales reales, crear usuarios, verificar login end-to-end)
+**Siguiente fase:** 🎯 **Fase 2.3 — Endpoint webhook Callbell + Realtime**
+_Conectar webhook de Callbell, procesar mensajes entrantes, Realtime para cards en vivo_
 
-> **Decisión de prioridad:** Supabase (proyecto + migraciones) → ✅ COMPLETADO → Auth (conectar a DB real) → Realtime → Callbell webhook → IA (Fase 3).
+> **Decisión de prioridad:** Supabase ✅ → Auth ✅ → 🚀 **FASE 2.2 (100% ✅)** → **🎯 FASE 2.3 ⬅️** → IA (Fase 3).
 
 **Historial de fases:**
 - ✅ Fase 0 — Definición y estructura documental (91%)
@@ -34,8 +35,9 @@ _13 migraciones ejecutadas · 10 tablas visibles · RLS desplegado · Consultas 
 - ✅ **Diseño AI Architecture** (100%)
 - ✅ **Auditoría PostgreSQL — 5 correcciones aplicadas** (100%)
 - 🚀 **✅ Infraestructura Base — Migraciones ejecutadas, 10 tablas, RLS activo** (100%)
-- 🔜 Fase 2.1 — Supabase Auth (conectar a DB real)
-- ⬜ Fase 2.2 — SupabaseApiService
+- ✅ **Fase 2.1 — Supabase Auth (conectar a DB real)** — .env.local, login validado, Git/GitHub (100%)
+- 🚀 **✅ FASE 2.2 — SupabaseApiService** — 7/7 completadas (100%)
+- 🎯 **⬜ Fase 2.3 — Endpoint webhook Callbell + Realtime**
 - ⬜ Fase 3 — Análisis con Claude IA
 - ⬜ Fase 4 — Acciones del asesor
 - ⬜ Fase 5 — Seguimiento y métricas
@@ -61,6 +63,16 @@ El sistema propuesto interpone una capa de IA (Claude API) que analiza automáti
 
 **🚀 Infraestructura Base completada —** Las 13 migraciones SQL (001_enums → 013_rls) fueron ejecutadas exitosamente en Supabase: 10 tablas visibles, RLS desplegado con 10 políticas, consultas SELECT validadas en cada tabla. Base de datos operativa y lista para recibir datos reales.
 
+**🔜 FASE 2.1 completada —** .env.local configurado con credenciales reales de Supabase. Repositorio Git conectado a GitHub (git@github.com:TianSB/lavalle11-panel.git). `npm run dev` funciona correctamente. Login real validado end-to-end. Dashboard accesible con datos mock.
+
+**🚀 FASE 2.2 COMPLETA (7/7, 100%) —** Sistema completamente migrado de mocks a datos reales:
+- **SS-01/02/03:** Infraestructura base (constants.ts, SupabaseCasoService, setCasoService())
+- **SS-04:** DashboardPage migrado a `useCasos()` — filtros, stats y loading state desde hook real
+- **SS-05:** MetricsBoard migrado a `useMetricas()` — hook refactor para derivar métricas desde `useCasos()` (0 network calls extra), null safety, loading state
+- **SS-06:** Auditoría RLS completa — 10/10 tablas protegidas, 4 escenarios de fuga verificados, nivel 🟢 OK
+- **SS-07:** Deployment readiness — TypeScript 0 errores ✅, Vite build OK (135KB gzip) ✅, vercel.json creado ✅, error handling fix en DashboardPage (banner rojo + separación loading/error/empty) ✅
+- Mocks mantenidos como respaldo. Bundle listo para Vercel. **Progreso FASE 2.2: 7/7 (100%)**
+
 ## 4. Documentación Disponible
 
 | Documento | Ubicación | Estado |
@@ -69,8 +81,8 @@ El sistema propuesto interpone una capa de IA (Claude API) que analiza automáti
 | PRD en Markdown | `core/PRD.md` | ✅ Generado |
 | Arquitectura | `ARCHITECTURE.md` | ✅ Generado (+ 12 diagramas Mermaid) |
 | Decisiones técnicas | `DECISIONS.md` | ✅ 8 ADRs registrados |
-| Plan de trabajo | `TODO.md` | ✅ 109 tareas, 77 completadas (71%) |
-| Registro de sesiones | `SESSION_LOG.md` | ✅ 7 sesiones registradas |
+| Plan de trabajo | `TODO.md` | ✅ 115 tareas, 85 completadas (74%) |
+| Registro de sesiones | `SESSION_LOG.md` | ✅ 11 sesiones registradas |
 | Requerimientos | `core/requirements.md` | ✅ Generado |
 | Casos de uso | `core/use-cases.md` | ✅ Generado |
 | Reglas de negocio | `core/business-rules.md` | ✅ Generado |
@@ -91,11 +103,11 @@ El sistema propuesto interpone una capa de IA (Claude API) que analiza automáti
 | Frontend | React 19 + Vite + Tailwind CSS v4 + TypeScript estricto | ✅ **Implementado + Refactorizado** |
 | Backend | Node.js (Vercel Serverless Functions) | ⬜ Pendiente (Fase 2) |
 | Base de datos | Supabase (PostgreSQL + Realtime + Auth) | ✅ **Desplegada — 13 migraciones, 10 tablas, RLS activo** |
-| Auth | Supabase Auth (@supabase/supabase-js v2.108.1) | 🟡 **Cliente listo — pendiente conectar a DB real** |
+| Auth | Supabase Auth (@supabase/supabase-js v2.108.1) | ✅ **Login real — .env.local configurado, login end-to-end validado** |
 | IA | Provider-agnostic (Claude, GPT, Gemini, DeepSeek) | ✅ **Arquitectura diseñada y aprobada — pendiente implementación** |
 | CRM | Callbell API (webhooks + Messages API) | ⬜ Pendiente (Fase 2) |
 | Config | Google Sheets API | ⬜ Pendiente (Fase 3) |
-| Repositorio | GitHub | ⬜ Pendiente de crear |
+| Repositorio | GitHub (`git@github.com:TianSB/lavalle11-panel.git`) | ✅ **Conectado — push exitoso, branch main** |
 
 ## 6. Variables de Entorno Requeridas
 
@@ -238,16 +250,105 @@ VITE_SUPABASE_ANON_KEY=     # ✅ Configurada en cliente (placeholder)
 | R09 | Trigger auditoría detecta cambios falsos (CR-01) | 🟡 Media | ✅ **Resuelto** — Comparación corregida en `010_auditoria_eventos.sql` | ✅ Resuelto |
 | R10 | Perfil desactualizado si cambia email en Auth (R-01) | 🟢 Baja | ✅ **Resuelto** — Trigger UPDATE agregado en `002_usuarios.sql` | ✅ Resuelto |
 
-## 12. Próximos Pasos Inmediatos
+## 12. Auditoría Técnica — FASE 2.2: Reemplazo de Mocks
+
+**Fecha:** 2026-06-11
+**Objetivo:** Determinar el estado actual del código para planificar el reemplazo de datos mock por consultas reales a Supabase.
+
+### Hallazgos: Archivos que importan directamente de mockCases.ts
+
+| Archivo | Importa | Riesgo |
+|---|---|---|
+| `src/pages/DashboardPage.tsx` | `MOCK_CASOS` (línea 3) | 🔴 **Crítico** — Filtrado, stats y lógica de vista dependen del mock |
+| `src/components/metrics/MetricsBoard.tsx` | `MOCK_METRICAS`, `MOCK_CASOS_POR_TIPO`, `MOCK_VOLUMEN_DIARIO` (línea 1) | 🔴 **Crítico** — Todo el dashboard de métricas usa datos mock |
+| `src/components/layout/Sidebar.tsx` | `TIPOS_CASO` (línea 1) | 🟢 **Bajo** — Solo constante de display → ✅ **SS-01 resuelto: importa de `src/constants.ts`** |
+| `src/components/cases/FilterBar.tsx` | `TIPOS_CASO` (línea 3) | 🟢 **Bajo** — Solo constante de display → ✅ **SS-01 resuelto: importa de `src/constants.ts`** |
+| `src/components/modal/CaseModal.tsx` | `TIPOS_CASO` (línea 14) | 🟢 **Bajo** — Solo constante de display → ✅ **SS-01 resuelto: importa de `src/constants.ts`** |
+| `src/services/mockService.ts` | Todos los MOCK_* | 🟡 **Medio** — Implementación del servicio mock que será reemplazada |
+
+### Hallazgos: Estado de la arquitectura de servicios
+
+| Componente | Estado | Detalle |
+|---|---|---|
+| `CasoService` interface | ✅ **Lista** | 10 métodos: getCasos, getCasosByAsesor, getMetricasResumen, getCasosPorTipo, getVolumenDiario, getUsuarios, asignarCaso, cerrarCaso, enviarMensaje |
+| `mockCasoService` | ✅ **Funcional** | Implementación mock con delays simulados y datos hardcodeados |
+| `setCasoService()` | ✅ **Listo** | Permite swap en runtime sin cambiar consumidores |
+| `useCasos()` hook | ✅ **Listo** | Consume `activeService.getCasos()` |
+| `useCasosPorAsesor()` hook | ✅ **Listo** | Consume `activeService.getCasosByAsesor()` |
+| `useMetricas()` hook | ✅ **Listo** | Consume 3 métodos: getMetricasResumen, getCasosPorTipo, getVolumenDiario |
+| `DashboardPage` usa hooks | ✅ **Sí** | useCasos() con filtrado en useMemo, stats desde datos reales. SS-04 completado S11 |
+| `MetricsBoard` usa hooks | ✅ **Sí** | useMetricas() con null safety y loading state. SS-05 completado S11 |
+| `src/services/supabase/casoService.ts` | ✅ **Existe (server-side)** | Usa cliente admin. Diseñado para webhook, no para frontend |
+
+### Brecha: Lo que falta para FASE 2.2
+
+| # | Brecha | Impacto | Solución propuesta | Estado |
+|---|---|---|---|---|
+| 1 | No existe `SupabaseCasoService` (client-side) | ⬛ No hay implementación real de CasoService para el frontend | Crear `src/services/supabaseService.ts` implementando CasoService usando el cliente anon (respeta RLS) | ✅ **Resuelto S10** |
+| 2 | DashboardPage filtra con `MOCK_CASOS` directo en `useMemo` | 🔴 Stats incorrectos, sin datos reales | Migrar a `useCasos()` + derivar stats del estado reactivo | ✅ **Resuelto S11** |
+| 3 | MetricsBoard usa `MOCK_METRICAS` directo | 🔴 KPIs y gráficos sin datos reales | Migrar a `useMetricas()` hook | ✅ **Resuelto S11** |
+| 4 | Sidebar/FilterBar/CaseModal importan `TIPOS_CASO` de mockCases.ts | 🟢 Dependencia innecesaria de mock | Extraer `TIPOS_CASO` a `src/constants.ts` | ✅ **Resuelto S10** |
+| 5 | `activeService` en useCasos.ts arranca con `mockCasoService` | 🟡 Los hooks devuelven datos mock por defecto | Llamar `setCasoService()` en `App.tsx` o bootstrap | ✅ **Resuelto S10** |
+
+### Plan Técnico Detallado para FASE 2.2
+
+**Prerrequisitos (✅ ya cumplidos):**
+- Supabase proyecto creado ✅
+- 13 migraciones ejecutadas ✅
+- .env.local con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY reales ✅
+- `@supabase/supabase-js` instalado ✅
+- `src/lib/supabase.ts` con cliente anon ✅
+- RLS activo con políticas por asesor_id ✅
+
+**7 tareas:**
+
+| # | Tarea | Archivos involucrados | Esfuerzo |
+|---|---|---|---|
+| **SS-01** | Extraer TIPOS_CASO a `src/constants.ts` ✅ **S10** | `mockCases.ts`, `Sidebar.tsx`, `FilterBar.tsx`, `CaseModal.tsx`, `mockService.ts` | 🔵 Bajo |
+| **SS-02** | Crear `SupabaseCasoService` implementando `CasoService` ✅ **S10** | `src/services/supabaseService.ts` (nuevo. ~100 líneas) | 🔴 Alto |
+| **SS-03** | Wirear `setCasoService()` al inicio de la app ✅ **S10** | `App.tsx` o `main.tsx` — 2 líneas | 🟢 Mínimo |
+| **SS-04** | Migrar DashboardPage: useCasos() en lugar de MOCK_CASOS ✅ **S11** | `DashboardPage.tsx` — loading state, error banner, stats desde datos reales | 🔴 Alto |
+| **SS-05** | Migrar MetricsBoard: useMetricas() ✅ **S11** | `MetricsBoard.tsx` + refactor hook (deriva de useCasos con useMemo) | 🟡 Medio |
+| **SS-06** | Auditoría de seguridad RLS ✅ **S11** | 10/10 tablas auditadas. 🟢 OK. Sin fugas. 3 recomendaciones | 🟡 Medio |
+| **SS-07** | Deploy readiness + vercel.json + error fix ✅ **S11** | Build OK, vercel.json, error banner DashboardPage | 🟢 Mínimo |
+
+**No implementar en FASE 2.2:**
+- ❌ Realtime (cards en vivo) — se pospone a Fase 2.3
+- ❌ Callbell webhook — endpoint ya existe pero no se despliega hasta Fase 2.3
+- ❌ Claude IA — Fase 3 completa
+- ❌ Procesamiento de imágenes/adjuntos — Fase 3
+
+**Estrategia de migración:**
+1. ✅ `setCasoService()` se llama en `App.tsx` — SS-03
+2. ✅ `DashboardPage` migrado a `useCasos()` — SS-04
+3. ✅ `MetricsBoard` migrado a `useMetricas()` — SS-05
+4. ✅ `Sidebar`, `FilterBar` y `CaseModal` importan de `constants.ts` — SS-01
+5. ✅ `SupabaseCasoService` creado e implementado — SS-02
+6. ✅ RLS auditado y validado — SS-06
+7. ✅ Build validado, vercel.json creado — SS-07
+8. `mockCases.ts` y `mockService.ts` se mantienen como respaldo. Pendiente marcar como `@deprecated`
+
+**Riesgos identificados:**
+- Las consultas deben respetar RLS: el cliente anon solo ve filas donde `asesor_id = auth.uid()` o donde `asesor_id IS NULL`
+- El admin necesita ver todos los casos — requiere filtro por `rol = 'administrador'` en SupabaseCasoService
+- `useCasosPorAsesor()` debe usar `asesor_id = auth.uid()` directamente (no un parámetro) para seguridad
+
+## 13. Próximos Pasos Inmediatos
 
 1. ✅ **Fase 1 completada** — Frontend mock funcional
 2. ✅ **Fase 1.5 completada** — Refactor, service layer, hooks, bugs corregidos
-3. ✅ **Fase 2.1 completada** — Supabase Auth (cliente mock, session, roles)
-4. ✅ **Diseño AI Provider Architecture aprobado** — Arquitectura desacoplada de proveedores IA
-5. ✅ **Auditoría PostgreSQL aplicada** — 5 correcciones en migraciones SQL
-6. 🚀 **✅ Infraestructura Base** — 13 migraciones ejecutadas, 10 tablas, RLS activo
-7. ⬜ **🎯 FASE 2.1 — Supabase Auth (conectar a DB real)** — Configurar .env.local con credenciales reales
-8. ⬜ Crear usuarios en Supabase Auth (Franco, Brenda, Catalina, Macarena)
-9. ⬜ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-10. ⬜ **Fase 2.2:** SupabaseApiService + conectar hooks
-11. ⬜ **Fase 2.3:** Endpoint webhook Callbell + Realtime
+3. ✅ **Fase 2.1 completada** — Supabase Auth
+4. ✅ **Diseño AI Provider Architecture aprobado**
+5. ✅ **Auditoría PostgreSQL aplicada** — 5 correcciones
+6. 🚀 **✅ Infraestructura Base** — 13 migraciones, 10 tablas, RLS
+7. ✅ **FASE 2.1 — Supabase Auth real** — .env.local, login, GitHub
+8. 🚀 **✅ FASE 2.2 COMPLETA (7/7)** — Sistema migrado de mocks a datos reales
+   - SS-01/02/03: constants.ts, SupabaseCasoService, setCasoService()
+   - SS-04: DashboardPage → useCasos()
+   - SS-05: MetricsBoard → useMetricas() desde useCasos()
+   - SS-06: RLS auditado (🟢 OK)
+   - SS-07: Build OK, vercel.json, error fix
+9. 🎯 **⬜ Fase 2.3 — Endpoint webhook Callbell + Realtime**
+10. ⬜ **Fase 3:** Análisis con Claude IA
+11. ⬜ **Fase 4:** Acciones del asesor + Callbell Messages API
+12. ⬜ **Fase 5:** Seguimiento y métricas
