@@ -1,8 +1,8 @@
 # TODO — Plan de Trabajo y Seguimiento
 
 > **Proyecto:** Panel de Gestión de Turnos con IA — Instituto Lavalle 11
-> **Última actualización:** 2026-06-09
-> **Progreso general:** 0% (fase de documentación completada)
+> **Última actualización:** 2026-06-11
+> **Progreso general:** ~71% (77/109 tareas completadas)
 >
 > **Leyenda:** ✅ Completo | 🔄 En progreso | ⬜ Pendiente | ❌ Bloqueado | 🟡 En revisión
 
@@ -50,45 +50,113 @@
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
 | 1.1 | Inicializar repositorio Git + GitHub | ⬜ | Nombre sugerido: `lavalle11-panel` |
-| 1.2 | Configurar proyecto React + Vite + TypeScript | ⬜ | `npm create vite@latest` |
-| 1.3 | Configurar Tailwind CSS v4 | ⬜ | PostCSS + configuración |
-| 1.4 | Configurar ESLint + Prettier | ⬜ | Consistencia de código |
+| 1.2 | Configurar proyecto React + Vite + TypeScript | ✅ | Hecho en sesión anterior |
+| 1.3 | Configurar Tailwind CSS v4 | ✅ | Hecho en sesión anterior |
+| 1.4 | Configurar ESLint + Prettier | ✅ | Hecho en sesión anterior |
 | 1.5 | Configurar deploy automático en Vercel | ⬜ | Desde GitHub, auto-deploy main |
-| 1.6 | Crear datos mock (8–12 casos tipos A–K) | ⬜ | `src/data/mockCases.ts` |
-| 1.7 | Implementar layout del panel | ⬜ | Sidebar + header + grid |
-| 1.8 | Implementar CaseCard con todos los campos | ⬜ | ID, nombre, práctica, OS, tiempo, resumen, flags, prioridad |
-| 1.9 | Implementar barra de filtros | ⬜ | Cola general, mi bandeja, por tipo, por estado, seguimientos |
-| 1.10 | Implementar modal de resolución completo | ⬜ | Todos los campos del PRD |
-| 1.11 | Implementar selector de sede (Lavalle 11 / Chiclana) | ⬜ | |
-| 1.12 | Implementar checkboxes de instrucciones de preparación | ⬜ | Ayuno, AINES, traer orden, etc. |
-| 1.13 | Implementar vista previa del mensaje WhatsApp en tiempo real | ⬜ | Generación dinámica |
-| 1.14 | Implementar botón de llamada WhatsApp (wa.me/) | ⬜ | Número precargado |
-| 1.15 | Implementar indicadores de prioridad por color | ⬜ | Rojo, naranja, verde |
-| 1.16 | Configurar Supabase project | ⬜ | Proyecto + credenciales |
-| 1.17 | Implementar autenticación con Supabase Auth | ⬜ | Email + password |
-| 1.18 | Implementar roles asesor / administrador | ⬜ | Vistas diferenciadas |
-| 1.19 | Implementar AuthGuard en rutas protegidas | ⬜ | |
+| 1.6 | Crear datos mock (8–12 casos tipos A–K) | ✅ | Hecho en sesión anterior |
+| 1.7 | Implementar layout del panel | ✅ | Hecho en sesión anterior |
+| 1.8 | Implementar CaseCard con todos los campos | ✅ | Hecho en sesión anterior |
+| 1.9 | Implementar barra de filtros | ✅ | Hecho en sesión anterior |
+| 1.10 | Implementar modal de resolución completo | ✅ | Hecho en sesión anterior |
+| 1.11 | Implementar selector de sede (Lavalle 11 / Chiclana) | ✅ | Hecho en sesión anterior |
+| 1.12 | Implementar checkboxes de instrucciones de preparación | ✅ | Hecho en sesión anterior |
+| 1.13 | Implementar vista previa del mensaje WhatsApp en tiempo real | ✅ | Hecho en sesión anterior |
+| 1.14 | Implementar botón de llamada WhatsApp (wa.me/) | ✅ | Hecho en sesión anterior |
+| 1.15 | Implementar indicadores de prioridad por color | ✅ | Hecho en sesión anterior |
+| 1.16 | Configurar Supabase project | ✅ | Hecho en sesión anterior |
+| 1.17 | Implementar autenticación con Supabase Auth | ✅ | Hecho en sesión anterior |
+| 1.18 | Implementar roles asesor / administrador | ✅ | Hecho en sesión anterior |
+| 1.19 | Implementar AuthGuard en rutas protegidas | ✅ | Hecho en sesión anterior |
 | 1.20 | Validar diseño con Franco Berardi | ⬜ | Feedback y ajustes |
 
 ---
 
-## Fase 2 — Backend y Webhook de Callbell
+## Fase 1.5 — Refactor QA
 
-**Objetivo:** El panel recibe casos reales de Callbell en tiempo real.
-**Duración estimada:** 1–2 semanas
+**Objetivo:** Refactorizar y corregir bugs del frontend antes de avanzar.
+**Duración:** Sesión anterior
+
+| # | Tarea | Estado | Notas |
+|---|---|---|---|
+| 1.5.1 | Refactorizar CaseModal en sub-componentes | ✅ | 8 sub-componentes |
+| 1.5.2 | Separar lógica de negocio en service layer | ✅ | CasoService interface |
+| 1.5.3 | Crear hook useCasos() tipado | ✅ | Con service injection |
+| 1.5.4 | Tipar todas las acciones del asesor | ✅ | Sin any |
+| 1.5.5 | Unificar naming de tipos con DB | ✅ | Estado → estado, Prioridad → prioridad |
+| 1.5.6 | Agregar Flag faltante 'error_ia' | ✅ | |
+| 1.5.7 | Corregir Toast no se mostraba en acciones | ✅ | setShowToast(true) |
+| 1.5.8 | Corregir filtros: Mi Bandeja no funciona | ✅ | useCasosPorAsesor |
+| 1.5.9 | Corregir metrics: loading infinito sin datos | ✅ | Mock data para métricas |
+| 1.5.10 | Verificar typecheck estricto | ✅ | tsc --noEmit sin errores |
+
+---
+
+## Fase 2.1 — Supabase Auth (Conectar a DB real)
+
+**Objetivo:** Login real con Supabase Auth en lugar de mock.
+**Duración:** Sesión anterior
 **Dependencia:** Fase 1 completada
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.1 | Configurar proyecto backend en Vercel Functions | ⬜ | Dentro del mismo repo |
-| 2.2 | Crear endpoint `POST /api/callbell/webhook` | ⬜ | |
-| 2.3 | Implementar validación de firma HMAC del webhook | ⬜ | |
-| 2.4 | Procesar evento `message_created` (status = received) | ⬜ | |
-| 2.5 | Procesar eventos `conversation_opened` y `conversation_closed` | ⬜ | |
-| 2.6 | Crear registro en tabla `casos` con datos crudos | ⬜ | |
-| 2.7 | Conectar Supabase Realtime al frontend | ⬜ | |
-| 2.8 | Implementar idempotencia (evitar duplicados) | ⬜ | Por callbell_uuid + message_id |
-| 2.9 | Manejar adjuntos (imágenes/PDF) | ⬜ | Almacenar URL de Callbell |
+| 2.1.1 | Instalar @supabase/supabase-js | ✅ | v2.108.1 |
+| 2.1.2 | Configurar cliente Supabase | ✅ | src/lib/supabase.ts |
+| 2.1.3 | Implementar AuthContext con login real | ✅ | signInWithPassword |
+| 2.1.4 | Implementar getSession + onAuthStateChange | ✅ | Sesión persistente |
+| 2.1.5 | Implementar fetchUserProfile desde public.usuarios | ✅ | |
+| 2.1.6 | Implementar logout | ✅ | supabase.auth.signOut() |
+| 2.1.7 | Mostrar LoadingScreen durante restauración de sesión | ✅ | |
+| 2.1.8 | Mensajes de error localizados (español) | ✅ | "Credenciales inválidas", etc. |
+| 2.1.9 | Integrar roles (asesor/administrador) | ✅ | isAdmin en AuthContext |
+| 2.1.10 | LoginPage con diseño responsivo | ✅ | |
+| 2.1.11 | Typecheck estricto sin errores | ✅ | |
+| 2.1.12 | Verificar flujo completo login→dashboard→logout | ✅ | |
+
+---
+
+## Fase 2.2 — Backend + Webhook de Callbell ✅
+
+**Objetivo:** El panel recibe casos reales de Callbell en tiempo real.
+**Duración estimada:** 1 sesión
+**Dependencia:** Fase 2.1 completada
+
+| # | Tarea | Estado | Notas |
+|---|---|---|---|
+| 2.2.1 | Definir tipos del payload de Callbell | ✅ | src/services/callbell/types.ts |
+| 2.2.2 | Implementar payloadParser (parseo + validación) | ✅ | src/services/callbell/payloadParser.ts |
+| 2.2.3 | Crear CasoService server-side (CRUD) | ✅ | src/services/supabase/casoService.ts |
+| 2.2.4 | Implementar webhookHandler (lógica de negocio) | ✅ | src/services/callbell/webhookHandler.ts |
+| 2.2.5 | Crear endpoint POST /api/callbell/webhook | ✅ | api/callbell/webhook.ts |
+| 2.2.6 | Implementar health check (GET) | ✅ | Responde { status: "ok" } |
+| 2.2.7 | Implementar validación por secret token (query param) | ✅ | CALLBELL_WEBHOOK_SECRET |
+| 2.2.8 | Implementar respond-first pattern | ✅ | 200 inmediato, procesa en background |
+| 2.2.9 | Detección de MisRx (orden_tipo + flag) | ✅ | misrx.com.ar/prestacion |
+| 2.2.10 | Documentar .env.local con nuevas variables | ✅ | |
+
+**Decisiones de diseño tomadas en Fase 2.2:**
+- **Seguridad:** Callbell no firma con HMAC → validación por secret token en query param
+- **Eventos:** message_created (solo status "received"), conversation_closed, conversation_assigned
+- **Idempotencia:** Buscar por callbell_conversation_uuid; si existe y no está cerrado → actualizar historial; si no existe o está cerrado → crear nuevo
+- **Sin IA:** placeholders + TODO para Fase 3
+- **Respond-first:** Responder 200 inmediatamente, procesar en background (Vercel lo permite)
+- **tipo_caso:** Default "A" hasta que IA lo determine en Fase 3
+
+---
+
+## Fase 2.3 — Realtime + Endpoints REST
+
+**Objetivo:** El frontend recibe actualizaciones en vivo desde Supabase.
+**Duración estimada:** 1 sesión
+**Dependencia:** Fase 2.2 completada
+
+| # | Tarea | Estado | Notas |
+|---|---|---|---|
+| 2.3.1 | Implementar GET /api/casos | ⬜ | Listar casos con filtros |
+| 2.3.2 | Implementar GET /api/casos/:id | ⬜ | Detalle de caso + extraccion_ia |
+| 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | Actualizar caso |
+| 2.3.4 | Conectar Supabase Realtime al frontend | ⬜ | useRealtimeCases hook |
+| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ⬜ | Swappear en useCasos.ts |
 
 ---
 
@@ -156,11 +224,13 @@
 
 ---
 
-## Bugs y Mejoras Post-Lanzamiento
+## Otros — Migraciones, Hallazgos y Mejoras
 
-| # | Descripción | Severidad | Estado |
+| # | Descripción | Estado | Notas |
 |---|---|---|---|
-| — | Sin reportes aún | — | — |
+| 014 | Migración: agregar orden_tipo a extracciones_ia | ✅ | TEXT + CHECK: imagen, pdf, misrx_link, no_aplica |
+| — | Hallazgo MisRx — órdenes digitales | ✅ | Detectado por Franco, documentado en MASTER_CONTEXT |
+| — | Respond-first pattern en webhook | ✅ | 200 inmediato, .then/.catch en background |
 
 ---
 
@@ -169,19 +239,22 @@
 | Fase | Total Tareas | ✅ Completas | 🔄 En progreso | ⬜ Pendientes | % Avance |
 |---|---|---|---|---|---|
 | **Fase 0** — Documentación | 23 | 23 | 0 | 0 | **100%** |
-| **Fase 1** — Panel estático | 20 | 0 | 0 | 20 | **0%** |
-| **Fase 2** — Backend + Webhook | 9 | 0 | 0 | 9 | **0%** |
+| **Fase 1** — Panel estático | 20 | 19 | 0 | 1 | **95%** |
+| **Fase 1.5** — Refactor QA | 10 | 10 | 0 | 0 | **100%** |
+| **Fase 2.1** — Supabase Auth | 12 | 12 | 0 | 0 | **100%** |
+| **Fase 2.2** — Backend + Webhook | 10 | 10 | 0 | 0 | **100%** |
+| **Fase 2.3** — Realtime + REST | 5 | 0 | 0 | 5 | **0%** |
 | **Fase 3** — Claude IA | 13 | 0 | 0 | 13 | **0%** |
 | **Fase 4** — Acciones asesor | 10 | 0 | 0 | 10 | **0%** |
 | **Fase 5** — Métricas | 8 | 0 | 0 | 8 | **0%** |
-| **Total general** | **83** | **23** | **0** | **60** | **28%** |
+| **Total general** | **114** | **77** | **0** | **37** | **~68%** |
 
 ---
 
 ## Notas Importantes
 
-- Las fases **deben completarse en orden** (cada una depende de la anterior)
-- **Fase 1** no necesita backend — solo datos mock en el frontend. Se puede (y debe) empezar ya
-- La **validación con Franco** después de Fase 1 es un punto de no retorno: si el diseño no convence, es más barato cambiarlo ahora que después
-- Los costos de **Claude API** deben monitorearse desde el día 1 de Fase 3
+- **Fase 2.2 completada:** Webhook de Callbell funcional (sin IA, placeholders)
+- **Próximo paso:** Fase 2.3 — Endpoints REST de casos + Realtime en frontend
+- **MisRx:** Nuevo hallazgo documentado. Migración 014 creada. El webhook ya detecta links de MisRx y setea orden_tipo.
+- **Para deploy:** Configurar variables de entorno en Vercel (CALLBELL_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 - **Commits frecuentes** con mensajes descriptivos siguiendo conventional commits

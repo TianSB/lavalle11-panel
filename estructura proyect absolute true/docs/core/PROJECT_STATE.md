@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-09
-> **Versión:** 1.0 — Basado en PRD v1.0 Draft
+> **Última actualización:** 2026-06-11
+> **Versión:** 1.2 — Fase 2.2 completada (Backend + Webhook Callbell)
 
 ---
 
@@ -26,13 +26,16 @@
 | Fase | Estado | Progreso |
 |---|---|---|
 | **Fase 0 — Definición y documentación** | ✅ Completada | 100% |
-| **Fase 1 — Panel estático (validación visual)** | ⬜ Pendiente | 0% |
-| Fase 2 — Backend y webhook de Callbell | ⬜ Pendiente | 0% |
+| **Fase 1 — Panel estático + Auth** | ✅ Completada | 100% |
+| **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
+| **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
+| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ Completada | 100% |
+| Fase 2.3 — Realtime + Endpoints REST | ⬜ Pendiente | 0% |
 | Fase 3 — Análisis con Claude IA | ⬜ Pendiente | 0% |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Inicializar proyecto React + Vite + Tailwind y comenzar Fase 1.
+**Siguiente paso:** Agregar endpoints REST (GET /api/casos, GET /api/casos/:id) y conectar Realtime al frontend.
 
 ---
 
@@ -60,16 +63,17 @@ El sistema propuesto:
 
 | Componente | Tecnología | Versión | Estado |
 |---|---|---|---|
-| Frontend | React + Vite + Tailwind CSS | React 19 | Pendiente de inicializar |
-| Lenguaje | **TypeScript estricto** — frontend y backend | — | Confirmado por el usuario |
-| Backend | Node.js (Vercel Serverless Functions) | 20 LTS | Pendiente de inicializar |
-| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | Pendiente de configurar |
-| IA | Claude API (Anthropic) | claude-sonnet-4-20250514 | Pendiente de integrar |
-| CRM | Callbell API (Webhooks + Messages API) | — | Pendiente de integrar |
-| Config remota | Google Sheets API | v4 | Pendiente de integrar |
+| Frontend | React + Vite + Tailwind CSS | React 19 | ✅ Implementado + Refactorizado |
+| Lenguaje | **TypeScript estricto** — frontend y backend | — | ✅ Confirmado |
+| Backend | Node.js (Vercel Serverless Functions) | 20 LTS | ✅ **Webhook implementado** (api/callbell/webhook.ts) |
+| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ **13 migraciones ejecutadas, RLS activo** |
+| Auth | Supabase Auth (@supabase/supabase-js) | v2.108.1 | ✅ Login real, logout, sesión, roles |
+| IA | Claude API (Anthropic) — Provider-agnostic | — | ✅ Arquitectura diseñada y auditada |
+| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook implementado (Fase 2.2)** |
+| Config remota | Google Sheets API | v4 | ⬜ Pendiente (Fase 3) |
 | Llamadas de voz | WhatsApp Desktop via wa.me/ | — | Fuera del sistema |
-| Repositorio | GitHub | — | Pendiente de crear |
-| Hosting | Vercel (Pro) | — | Pendiente de configurar |
+| Repositorio | GitHub | — | ⬜ Pendiente |
+| Hosting | Vercel (Pro) | — | ⬜ Pendiente |
 
 ---
 
@@ -79,23 +83,44 @@ El sistema propuesto:
 /
 ├── PRD_Lavalle11_v1.docx       # PRD original (fuente de verdad)
 ├── README.md                   # Portal de entrada
-├── docs/
-│   ├── core/
-│   │   ├── PROJECT_STATE.md    # ← Este archivo
-│   │   ├── ARCHITECTURE.md     # Arquitectura del sistema
-│   │   ├── DECISIONS.md        # Decisiones técnicas (ADRs)
-│   │   ├── TODO.md             # Plan de trabajo
-│   │   └── SESSION_LOG.md      # Registro de sesiones
-│   ├── glossary.md             # Glosario de términos
-│   ├── risks.md                # Matriz de riesgos
-│   └── workflow.md             # Flujo de trabajo con IA
-│   ├── core/                   # PRD, requisitos, casos de uso, reglas
-│   ├── decisions/              # ADRs individuales
-│   ├── planning/               # Roadmap y planes de fase
-│   ├── backend/                # Documentación del backend
-│   ├── frontend/               # Documentación del frontend
-│   ├── database/               # Esquema y políticas de base de datos
-│   └── prompts/                # Prompts del sistema
+├── .env.local                  # Documentación de variables de entorno
+├── api/
+│   └── callbell/
+│       └── webhook.ts          # 🆕 Serverless Function — webhook de Callbell
+├── src/
+│   ├── services/
+│   │   ├── callbell/
+│   │   │   ├── types.ts        # 🆕 Tipos del payload de Callbell
+│   │   │   ├── payloadParser.ts # 🆕 Parseador del payload crudo
+│   │   │   └── webhookHandler.ts # 🆕 Lógica de negocio del webhook
+│   │   ├── supabase/
+│   │   │   └── casoService.ts  # 🆕 CRUD server-side de casos
+│   │   └── mockService.ts      # Mock service (frontend)
+│   ├── lib/
+│   │   └── supabase.ts         # Cliente Supabase (frontend)
+│   ├── types/
+│   │   └── index.ts            # Tipos compartidos
+│   ├── hooks/
+│   │   └── useCasos.ts         # Hook de casos con service layer
+│   ├── context/
+│   │   └── AuthContext.tsx      # Contexto de autenticación
+│   ├── components/              # Componentes React
+│   ├── pages/                   # Páginas
+│   └── data/
+│       └── mockCases.ts        # Datos mock
+├── database/
+│   └── migrations/
+│       ├── 001_enums.sql       # 22 ENUMs
+│       ├── ...
+│       ├── 013_rls.sql         # Políticas RLS
+│       └── 014_orden_tipo.sql  # 🆕 Campo orden_tipo para MisRx
+└── docs/
+    └── core/
+        ├── PROJECT_STATE.md    # ← Este archivo
+        ├── ARCHITECTURE.md     # Arquitectura del sistema
+        ├── DECISIONS.md        # Decisiones técnicas (ADRs)
+        ├── TODO.md             # Plan de trabajo
+        └── SESSION_LOG.md      # Registro de sesiones
 ```
 
 ---
@@ -121,8 +146,11 @@ El sistema propuesto:
 | `planning/roadmap.md` | Roadmap de desarrollo | ✅ Completo |
 | `planning/phase-1-panel-estatico.md` | Plan detallado de Fase 1 | ✅ Completo |
 | `backend/INDEX.md` | Documentación del backend | 🟡 Esqueleto |
+| `backend/API_SPEC.md` | Especificación de API REST | ✅ Completo |
 | `frontend/INDEX.md` | Documentación del frontend | 🟡 Esqueleto |
+| `frontend/UI_SPEC.md` | Especificación de UI | ✅ Completo |
 | `database/INDEX.md` | Documentación de base de datos | 🟡 Esqueleto |
+| `database/DATABASE_SCHEMA.md` | Schema completo de base de datos | ✅ Completo |
 | `prompts/INDEX.md` | Documentación de prompts | 🟡 Esqueleto |
 
 ---
@@ -131,12 +159,12 @@ El sistema propuesto:
 
 ```env
 # === Backend (Vercel Environment Variables) ===
-ANTHROPIC_API_KEY=             # API key de Anthropic para Claude
-CALLBELL_API_KEY=              # API key de Callbell Messages API
-CALLBELL_WEBHOOK_SECRET=       # Secreto para validar webhooks de Callbell
-SUPABASE_URL=                  # URL del proyecto Supabase
-SUPABASE_SERVICE_ROLE_KEY=     # Service role key de Supabase
-GOOGLE_SHEETS_API_KEY=         # API key de Google Sheets
+CALLBELL_WEBHOOK_SECRET=       # Token secreto para validar webhooks de Callbell (query param)
+CALLBELL_API_TOKEN=            # API key de Callbell Messages API
+SUPABASE_URL=                  # URL del proyecto Supabase (Project Settings > API)
+SUPABASE_SERVICE_ROLE_KEY=     # Service role key de Supabase (NO la anon key)
+ANTHROPIC_API_KEY=             # API key de Anthropic para Claude (Fase 3)
+GOOGLE_SHEETS_API_KEY=         # API key de Google Sheets (Fase 3)
 GOOGLE_SHEETS_ID=              # ID del spreadsheet de obras sociales y precios
 
 # === Frontend (Vite Environment Variables) ===
@@ -165,22 +193,23 @@ VITE_SUPABASE_ANON_KEY=        # Anon key de Supabase (pública)
 | R01 | Precisión de Claude en órdenes manuscritas | Alto | Alta | 🔴 Crítico | Score de confianza por campo, campos <0.7 resaltados |
 | R02 | Latencia de Claude API | Medio | Media | 🟡 Alto | Modelo rápido, timeout con retry |
 | R03 | Costo impredecible de Claude API | Medio | Media | 🟡 Alto | Monitoreo de tokens desde día 1 |
-| R06 | Webhooks duplicados de Callbell | Medio | Media | 🟡 Alto | Idempotencia por UUID + message_id |
+| R06 | Webhooks duplicados de Callbell | Medio | Media | 🟡 Alto | Idempotencia por callbell_conversation_uuid + message_id |
 | R08 | Adopción del equipo asesor | Alto | Alta | 🔴 Crítico | Fase 1 con datos mock para validar UX |
 | R10 | Cold starts de Vercel Serverless | Bajo | Baja | 🟢 Bajo | Warm-up con cron |
+| R11 | Precisión de lectura de MisRx (links) | Bajo | Baja | 🟢 Bajo | El asesor abre el link manualmente en v1 |
 
 ---
 
 ## 10. Próximos Pasos Inmediatos
 
-1. ✅ Crear estructura documental del proyecto
-2. ⬜ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-3. ⬜ Configurar proyecto React + Vite + Tailwind
-4. ⬜ Configurar deploy automático en Vercel
-5. ⬜ Configurar proyecto Supabase
-6. ⬜ Implementar Fase 1: Panel estático con datos hardcodeados
-7. ⬜ Validar diseño con Franco Berardi
-8. ⬜ Avanzar a Fase 2, 3, 4, 5 secuencialmente
+1. ✅ Migración 014_orden_tipo.sql — MisRx digital orders
+2. ✅ Fase 2.2 — Backend + Webhook de Callbell (5 archivos creados)
+3. ⬜ Agregar endpoints REST: GET /api/casos, GET /api/casos/:id
+4. ⬜ Conectar Supabase Realtime al frontend
+5. ⬜ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
+6. ⬜ Configurar deploy automático en Vercel
+7. ⬜ Configurar webhook en dashboard de Callbell
+8. ⬜ Avanzar a Fase 3, 4, 5 secuencialmente
 
 ---
 

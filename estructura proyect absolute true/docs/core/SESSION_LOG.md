@@ -105,3 +105,98 @@ Al finalizar, el usuario solicitó mover los 5 archivos maestros a `docs/core/` 
 - 🔑 **Próximo paso:** Inicializar repositorio y proyecto frontend
 
 ---
+
+## Sesión 8 — 2026-06-11
+
+**Objetivo:** Implementar Fase 2.2 — Backend + Webhook de Callbell. También crear migración 014_orden_tipo.sql para soportar órdenes digitales de MisRx.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, TypeScript, Vercel Serverless Functions, Supabase
+**Contexto inicial:** Fase 2.1 completada (Supabase Auth real), frontend mock funcional, 13 migraciones SQL ejecutadas en Supabase.
+
+### Resumen
+
+Se implementó el primer componente real del backend: el endpoint webhook que recibe eventos de Callbell y crea/actualiza casos en Supabase. También se creó la migración 014 para soportar el hallazgo MisRx reportado por Franco (órdenes digitales electrónicas).
+
+**Hallazgo MisRx:** Franco reportó que algunas órdenes médicas llegan como links de la plataforma MisRx (receta electrónica digital). Se documentó en MASTER_CONTEXT.md y se creó la migración 014 para agregar el campo `orden_tipo` a `extracciones_ia`.
+
+**Implementación del webhook (5 archivos creados):**
+
+1. **`api/callbell/webhook.ts`** — Serverless Function de Vercel. Maneja GET (health check) y POST (eventos). Validación por secret token en query param.
+2. **`src/services/callbell/types.ts`** — Interfaces completas del payload de Callbell + estructuras internas parseadas.
+3. **`src/services/callbell/payloadParser.ts`** — Parseo del payload crudo. Detecta adjuntos, links de MisRx, valida campos mínimos.
+4. **`src/services/supabase/casoService.ts`** — CRUD server-side: findByCallbellUuid, createCaso, updateCasoHistorial, closeCaso, assignCaso.
+5. **`src/services/callbell/webhookHandler.ts`** — Lógica de negocio: orquesta el flujo según tipo de evento (message_created, conversation_closed, conversation_assigned).
+
+**Correcciones durante code review:**
+- Se agregó filtro `message.status === "received"` para ignorar mensajes salientes del asesor (hallazgo crítico)
+- Se actualizó `updateCasoHistorial` para manejar MisRx en casos existentes
+- Se corrigió `tipo_caso` NOT NULL en el insert (faltaba el campo)
+- Se eliminaron variables/funciones no usadas (`TIPO_CASO_PENDIENTE`, `isCallbellClosed`)
+- Se aplicó **respond-first pattern**: responder 200 inmediatamente, procesar en background
+
+**Variables de entorno:** Se generó `CALLBELL_WEBHOOK_SECRET` (32 caracteres alfanuméricos) y se documentaron las variables en `.env.local`.
+
+### Archivos Creados/Modificados
+
+#### Nuevos:
+- `database/migrations/014_orden_tipo.sql` — Campo orden_tipo en extracciones_ia
+- `api/callbell/webhook.ts` — Vercel Serverless Function
+- `src/services/callbell/types.ts` — Tipos del payload de Callbell
+- `src/services/callbell/payloadParser.ts` — Parseador del payload
+- `src/services/supabase/casoService.ts` — CRUD server-side
+- `src/services/callbell/webhookHandler.ts` — Lógica de negocio
+- `.env.local` — Documentación de variables de entorno
+
+#### Modificados:
+- `docs/core/PROJECT_STATE.md` — Actualizado con progreso de Fase 2.2
+- `docs/core/TODO.md` — Fase 2.2 marcada como completada, nuevo resumen de progreso
+- `docs/core/SESSION_LOG.md` — Esta entrada
+
+### Decisiones Tomadas
+
+| Decisión | Detalle |
+|---|---|
+| **Seguridad webhook** | Callbell no firma con HMAC → validación por secret token en query param (`?secret=TOKEN`) |
+| **Eventos a procesar** | `message_created` (solo status "received"), `conversation_closed`, `conversation_assigned`. Otros → descartar |
+| **Idempotencia** | Buscar por `callbell_conversation_uuid`. Si existe y no está cerrado → actualizar historial. Si no existe o está cerrado → crear nuevo |
+| **Respond-first** | Responder 200 inmediatamente a Callbell, procesar en background con `.then()/.catch()` |
+| **Sin IA en Fase 2** | Placeholders + TODO comentado. `tipo_caso` default "A". `modelo_ia` = "pendiente" |
+| **MisRx v1** | Detectar `misrx.com.ar/prestacion` en texto. NO extraer contenido del link. El asesor abre manualmente |
+| **orden_tipo** | TEXT con CHECK: `imagen`, `pdf`, `misrx_link`, `no_aplica`. Default `no_aplica`. Sin ENUM (no existía previamente) |
+
+### Archivos de Referencia Creados
+
+| Archivo | Propósito |
+|---|---|
+| `database/migrations/014_orden_tipo.sql` | Migración para campo orden_tipo en extracciones_ia |
+| `api/callbell/webhook.ts` | Endpoint GET + POST del webhook |
+| `src/services/callbell/types.ts` | Interfaces: CallbellPayload, ParsedPayload, ParsedMessage, etc. |
+| `src/services/callbell/payloadParser.ts` | parsePayload(), validatePayload() |
+| `src/services/supabase/casoService.ts` | createCaso(), updateCasoHistorial(), closeCaso(), assignCaso(), findByCallbellUuid() |
+| `src/services/callbell/webhookHandler.ts` | handleWebhook(), handleMessageCreated(), handleConversationClosed(), handleConversationAssigned() |
+| `.env.local` | Documentación de variables de entorno |
+
+### Riesgos Identificados/Actualizados
+
+| # | Riesgo | Acción |
+|---|---|---|
+| R11 | Precisión de lectura de MisRx (links) | En v1 el asesor abre el link manualmente. Evaluar API/Puppeteer para v2 |
+
+### Pendientes para la Próxima Sesión
+
+- [ ] Implementar Fase 2.3: Endpoints REST (GET /api/casos, GET /api/casos/:id, PATCH /api/casos/:id)
+- [ ] Conectar Supabase Realtime al frontend (useRealtimeCases hook)
+- [ ] Migrar CasoService mock → SupabaseApiService
+- [ ] Configurar variables de entorno en Vercel y hacer deploy
+- [ ] Configurar webhook en dashboard de Callbell
+- [ ] Inicializar repositorio Git + GitHub
+
+### Estado al Cierre
+
+- ✅ Migración 014_orden_tipo.sql creada
+- ✅ Fase 2.2 completa — webhook funcional, 5 archivos creados
+- ✅ Respond-first pattern aplicado
+- ✅ .env.local documentado con todas las variables
+- ✅ CALLBELL_WEBHOOK_SECRET generado (32 chars)
+- ✅ Typecheck: OK (tsc --noEmit sin errores)
+- 🔑 **Próximo paso:** Fase 2.3 — Endpoints REST + Realtime
