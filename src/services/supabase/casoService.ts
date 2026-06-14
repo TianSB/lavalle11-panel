@@ -74,7 +74,7 @@ export async function findByCallbellUuid(
     .maybeSingle();
 
   if (error) {
-    console.error("[CASO_SERVICE] Error al buscar por callbell_uuid:", error.message);
+    console.error("[CASO] Error al buscar por callbell_uuid:", error);
     return null;
   }
 
@@ -89,8 +89,11 @@ export async function createCaso(
   supabase: SupabaseClient,
   parsed: ParsedPayload,
 ): Promise<CasoRow | null> {
+  console.log("[CASO] Iniciando createCaso");
+
   const contact = parsed.contact!;
   const conversation = parsed.conversation;
+  console.log("[CASO] Datos parseados — conv_uuid:", conversation.uuid, "phone:", contact.phone, "name:", contact.name);
 
   // --- 1. Insertar el caso ---
   const casoInput: CreateCasoInput = {
@@ -103,6 +106,7 @@ export async function createCaso(
     prioridad: "normal",
   };
 
+  console.log("[CASO] Ejecutando INSERT casos con datos:", JSON.stringify(casoInput));
   const { data: caso, error: casoError } = await supabase
     .from("casos")
     .insert(casoInput)
@@ -110,9 +114,10 @@ export async function createCaso(
     .single();
 
   if (casoError || !caso) {
-    console.error("[CASO_SERVICE] Error al crear caso:", casoError?.message);
+    console.error("[CASO] Resultado INSERT casos — ERROR:", casoError);
     return null;
   }
+  console.log("[CASO] Resultado INSERT casos — OK, id:", (caso as CasoRow).id);
 
   const casoRow = caso as CasoRow;
 
@@ -134,6 +139,7 @@ export async function createCaso(
     resumen: `Mensaje recibido de ${contact.name}. Pendiente de análisis por IA.`,
   };
 
+  console.log("[CASO] Ejecutando INSERT extracciones_ia para caso:", casoRow.id);
   const { error: extraccionError } = await supabase
     .from("extracciones_ia")
     .insert({
@@ -150,10 +156,13 @@ export async function createCaso(
     });
 
   if (extraccionError) {
-    console.error("[CASO_SERVICE] Error al crear extraccion_ia:", extraccionError.message);
+    console.error("[CASO] Resultado INSERT extracciones_ia — ERROR:", extraccionError);
     // El caso se creó igual — el asesor puede verlo aunque falten datos IA
+  } else {
+    console.log("[CASO] Resultado INSERT extracciones_ia — OK");
   }
 
+  console.log("[CASO] createCaso completado — caso:", casoRow.id);
   return casoRow;
 }
 
@@ -190,7 +199,7 @@ export async function updateCasoHistorial(
   });
 
   if (msgError) {
-    console.error("[CASO_SERVICE] Error al insertar mensaje:", msgError.message);
+    console.error("[CASO] Error al insertar mensaje:", msgError);
     return false;
   }
 
@@ -202,7 +211,7 @@ export async function updateCasoHistorial(
       .eq("id", casoId);
 
     if (updateError) {
-      console.error("[CASO_SERVICE] Error al actualizar contacto:", updateError.message);
+      console.error("[CASO] Error al actualizar contacto:", updateError);
     }
   }
 
@@ -226,7 +235,7 @@ export async function updateCasoHistorial(
       .eq("caso_id", casoId);
 
     if (updateError) {
-      console.error("[CASO_SERVICE] Error al actualizar MisRx en caso existente:", updateError.message);
+      console.error("[CASO] Error al actualizar MisRx en caso existente:", updateError);
     }
   }
 
@@ -250,7 +259,7 @@ export async function closeCaso(
     .eq("callbell_conversation_uuid", callbellUuid);
 
   if (error) {
-    console.error("[CASO_SERVICE] Error al cerrar caso:", error.message);
+    console.error("[CASO] Error al cerrar caso:", error);
     return false;
   }
 
@@ -268,7 +277,7 @@ export async function assignCaso(
   // Nota: Callbell envía el UUID del asesor, que podría no coincidir
   // con nuestro UUID de Supabase Auth. Esto requerirá mapeo en Fase 4.
   console.log(
-    "[CASO_SERVICE] conversation_assigned ignorado por ahora —",
+    "[CASO] conversation_assigned ignorado por ahora —",
     `callbell_uuid=${callbellUuid}, asesor_uuid=${asesorUuid}`,
   );
   return true;

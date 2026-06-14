@@ -52,9 +52,11 @@ export async function handleWebhook(
     console.warn("[WEBHOOK] Payload inválido: no es un objeto JSON");
     return { status: 200, message: "Payload inválido", casoId: null, created: false };
   }
+  console.log("[STEP 1] Payload validado");
 
   // --- 2. Parsear ---
   const parsed = parsePayload(rawBody as any);
+  console.log("[STEP 2] Payload parseado — event:", parsed.event, "conv_uuid:", parsed.conversation.uuid, "contact:", parsed.contact?.phone);
 
   const validationError = validatePayload(parsed);
   if (validationError) {
@@ -113,13 +115,13 @@ async function handleMessageCreated(
   }
 
   // --- 1. Buscar caso existente ---
+  console.log("[STEP 3] Buscando caso existente por conversation_uuid:", conversationUuid);
   const existingCaso = await findByCallbellUuid(supabase, conversationUuid);
+  console.log("[STEP 4] Resultado búsqueda — encontrado:", !!existingCaso, existingCaso ? "id:" + existingCaso.id + " estado:" + existingCaso.estado : "no encontrado");
 
   // --- 2. Si existe y no está cerrado → actualizar historial ---
   if (existingCaso && existingCaso.estado !== "cerrado") {
-    console.log(
-      `[WEBHOOK] Caso existente encontrado: ${existingCaso.id} (estado: ${existingCaso.estado}). Actualizando historial...`,
-    );
+    console.log("[STEP 7] Actualizando historial para caso existente:", existingCaso.id);
 
     const updated = await updateCasoHistorial(
       supabase,
@@ -130,9 +132,10 @@ async function handleMessageCreated(
     );
 
     if (!updated) {
-      console.error(`[WEBHOOK] Error al actualizar historial del caso ${existingCaso.id}`);
+      console.error("[STEP 7.ERR] Error al actualizar historial del caso", existingCaso.id);
     }
 
+    console.log("[STEP 8] Fin exitoso — caso existente actualizado:", existingCaso.id);
     return {
       status: 200,
       message: `Caso ${existingCaso.id} actualizado con nuevo mensaje`,
@@ -146,14 +149,16 @@ async function handleMessageCreated(
   // para determinar tipo_caso, extraer datos de la orden médica,
   // calcular confianza y generar flags automáticos.
   // Por ahora se crea con tipo_caso por defecto y placeholders.
+  console.log("[STEP 5] Creando nuevo caso para conversation:", conversationUuid);
   const nuevoCaso = await createCaso(supabase, parsed);
 
   if (!nuevoCaso) {
-    console.error("[WEBHOOK] Error al crear nuevo caso");
+    console.error("[STEP 6.ERR] createCaso devolvió null — no se insertó el caso");
     return { status: 200, message: "Error al crear caso en BD", casoId: null, created: false };
   }
 
-  console.log(`[WEBHOOK] Nuevo caso creado: ${nuevoCaso.id}`);
+  console.log("[STEP 6] Resultado createCaso — caso creado:", nuevoCaso.id);
+  console.log("[STEP 8] Fin exitoso — nuevo caso creado:", nuevoCaso.id);
 
   return {
     status: 200,
@@ -172,6 +177,7 @@ async function handleConversationClosed(
   parsed: ParsedPayload,
 ): Promise<WebhookResult> {
   const conversationUuid = parsed.conversation.uuid;
+  console.log("[STEP 3] conversation_closed — buscando caso por uuid:", conversationUuid);
 
   const closed = await closeCaso(supabase, conversationUuid);
 
