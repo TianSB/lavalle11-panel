@@ -111,14 +111,16 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  // --- Responder 200 A Callbell INMEDIATAMENTE (respond-first) ---
-  // Luego procesar en background manteniendo la función viva para Vercel
-  res.status(200).json({ status: "ok" });
-
+  // --- Procesar PRIMERO, responder DESPUÉS ---
+  // En Vercel Hobby, el respond-first pattern puede causar que
+  // las operaciones async nunca completen (runtime termina la función).
+  // Cambiamos a: procesar todo, luego enviar 200.
   try {
     await handleWebhook(supabase, rawBody);
-    console.log(`[WEBHOOK] Background processing completed (${Date.now() - startTime}ms)`);
+    console.log(`[WEBHOOK] Processing completed (${Date.now() - startTime}ms)`);
   } catch (err) {
-    console.error("[WEBHOOK] Background processing failed", err);
+    console.error("[WEBHOOK] Processing failed", err);
   }
+
+  res.status(200).json({ status: "ok" });
 }
