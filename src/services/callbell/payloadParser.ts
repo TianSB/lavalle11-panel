@@ -12,7 +12,7 @@ import type {
   ParsedConversation,
   OrdenTipo,
   CallbellAttachment,
-} from "./types";
+} from "./types.js";
 
 const MISRX_PATTERN = /misrx\.com\.ar\/prestacion/i;
 

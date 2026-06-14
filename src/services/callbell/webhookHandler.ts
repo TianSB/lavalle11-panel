@@ -9,15 +9,15 @@
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ParsedPayload } from "./types";
-import { parsePayload, validatePayload } from "./payloadParser";
+import type { ParsedPayload } from "./types.js";
+import { parsePayload, validatePayload } from "./payloadParser.js";
 import {
   findByCallbellUuid,
   createCaso,
   updateCasoHistorial,
   closeCaso,
   assignCaso,
-} from "../supabase/casoService";
+} from "../supabase/casoService.js";
 
 // -----------------------------------------------------------
 // Types

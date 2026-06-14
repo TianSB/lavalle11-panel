@@ -16,7 +16,7 @@
 // ============================================================
 
 import { createClient } from "@supabase/supabase-js";
-import { handleWebhook } from "../../src/services/callbell/webhookHandler";
+import { handleWebhook } from "../../src/services/callbell/webhookHandler.js";
 
 // -----------------------------------------------------------
 // Supabase admin client (server-side, bypasses RLS)

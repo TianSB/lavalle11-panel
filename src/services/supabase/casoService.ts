@@ -12,7 +12,7 @@
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ParsedPayload, ParsedMessage, ParsedContact } from "../callbell/types";
+import type { ParsedPayload, ParsedMessage, ParsedContact } from "../callbell/types.js";
 
 // -----------------------------------------------------------
 // Constants
