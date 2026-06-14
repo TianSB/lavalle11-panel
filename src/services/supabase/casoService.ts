@@ -67,18 +67,31 @@ export async function findByCallbellUuid(
   supabase: SupabaseClient,
   callbellUuid: string,
 ): Promise<CasoRow | null> {
-  const { data, error } = await supabase
-    .from("casos")
-    .select("*")
-    .eq("callbell_conversation_uuid", callbellUuid)
-    .maybeSingle();
+  try {
+    console.log("[CASO.FIND] VERSION CHECK 2026-06-14-A");
+    console.log("[CASO.FIND] Inicio búsqueda", callbellUuid);
 
-  if (error) {
-    console.error("[CASO] Error al buscar por callbell_uuid:", error);
-    return null;
+    console.log("[CASO.FIND] ANTES DEL QUERY");
+    const result = await supabase
+      .from("casos")
+      .select("*")
+      .eq("callbell_conversation_uuid", callbellUuid)
+      .maybeSingle();
+
+    console.log("[CASO.FIND] DESPUES DEL QUERY");
+    console.log("[CASO.FIND] Error:", result.error);
+    console.log("[CASO.FIND] Data:", result.data);
+
+    if (result.error) {
+      console.error("[CASO] Error al buscar por callbell_uuid:", result.error);
+      return null;
+    }
+
+    return result.data as CasoRow | null;
+  } catch (err) {
+    console.error("[CASO.FIND] EXCEPTION", err);
+    throw err;
   }
-
-  return data as CasoRow | null;
 }
 
 /**
