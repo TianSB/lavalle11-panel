@@ -94,6 +94,9 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  // 🔍 LOG TEMPORAL: capturar payload real de Callbell
+  console.log("[WEBHOOK] RAW PAYLOAD:", JSON.stringify(rawBody));
+
   // --- Obtener cliente Supabase ---
   let supabase;
   try {
