@@ -74,34 +74,23 @@ export async function findByCallbellUuid(
 
     console.log("[CASO.FIND] ANTES DEL QUERY");
 
-    // --- DIAGNÓSTICO: fetch directo con timeout 5s ---
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    try {
-      const supabaseUrl = process.env.SUPABASE_URL;
-      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const baseUrl = supabaseUrl!.replace(/\/+$/, '');
-      const diagUrl = `${baseUrl}/rest/v1/casos?callbell_conversation_uuid=eq.${callbellUuid}&select=id`;
-      const diagRes = await fetch(diagUrl, {
-        headers: {
-          "apikey": serviceKey!,
-          "Authorization": `Bearer ${serviceKey!}`
-        },
-        signal: controller.signal
-      });
-      console.log("[DIAG] FETCH STATUS:", diagRes.status, "OK:", diagRes.ok);
-    } catch (diagErr: any) {
-      console.log("[DIAG] FETCH ERROR — name:", diagErr.name, "message:", diagErr.message);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-    // --- FIN DIAGNÓSTICO ---
+    // --- DIAGNÓSTICO SINCRÓNICO (sin fetch, sin await) ---
+    console.log("[DIAG-1] Env vars:", {
+      urlExists: !!process.env.SUPABASE_URL,
+      keyExists: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      urlLen: process.env.SUPABASE_URL?.length ?? -1,
+      keyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? -1,
+      urlPrefix: process.env.SUPABASE_URL?.substring(0, 15) ?? 'NO_URL',
+    });
+    // --- FIN DIAGNÓSTICO SINCRÓNICO ---
 
+    console.log("[CASO.FIND] PRE-SUPA-FETCH");
     const result = await supabase
       .from("casos")
       .select("*")
       .eq("callbell_conversation_uuid", callbellUuid)
       .maybeSingle();
+    console.log("[CASO.FIND] POST-SUPA-FETCH");
 
     console.log("[CASO.FIND] DESPUES DEL QUERY");
     console.log("[CASO.FIND] Error:", result.error);
