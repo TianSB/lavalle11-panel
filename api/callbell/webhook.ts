@@ -108,14 +108,13 @@ export default async function handler(req: any, res: any) {
   }
 
   // --- Responder 200 A Callbell INMEDIATAMENTE (respond-first) ---
-  // Luego procesar en background para no bloquear el webhook
+  // Luego procesar en background manteniendo la función viva para Vercel
   res.status(200).json({ status: "ok" });
 
-  handleWebhook(supabase, rawBody)
-    .then((result) => {
-      console.log(`[WEBHOOK] ${result.message} (${Date.now() - startTime}ms)`);
-    })
-    .catch((err: Error) => {
-      console.error("[WEBHOOK] Error procesando evento:", err.message);
-    });
+  try {
+    await handleWebhook(supabase, rawBody);
+    console.log(`[WEBHOOK] Background processing completed (${Date.now() - startTime}ms)`);
+  } catch (err) {
+    console.error("[WEBHOOK] Background processing failed", err);
+  }
 }
