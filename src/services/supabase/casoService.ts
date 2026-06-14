@@ -209,7 +209,7 @@ export async function createCaso(
  * Flags 🤖 (Claude detecta): ayuno, aines, orden_incompleta, orden_ilegible
  * Flags ⚙️ (sistema aplica): baja_confianza, token_ioma, chiclana, error_ia, orden_digital_misrx
  */
-function buildFlags(
+export function buildFlags(
   analisis: RespuestaCanónica | undefined,
   parsed: ParsedPayload,
 ): string[] | null {

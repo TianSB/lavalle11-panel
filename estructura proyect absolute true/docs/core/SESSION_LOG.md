@@ -11,7 +11,193 @@
 > - Estado al cierre
 > - Pendientes para la próxima sesión
 
+---
 
+## Sesión 24 — 2026-06-14 — Fase 3: Integración Claude IA Completa + Reapertura de Casos Cerrados
+
+**Objetivo:** Implementar la capa de IA completa siguiendo FASE3_AI_INTEGRATION_PLAN.md. Analizar mensajes de WhatsApp entrantes (texto e imágenes de órdenes médicas) con Claude y poblar `extracciones_ia` con datos estructurados reales.
+**Duración:** 1 sesión (~3h)
+**Herramientas:** Codebuff IA, TypeScript, Anthropic SDK, Vercel Serverless, Supabase, GitHub
+
+### Resumen
+
+Se implementó la Fase 3 completa: 5 archivos nuevos de IA + modificaciones a webhookHandler y casoService. Además se agregó reapertura de casos cerrados (bug 23505) y se fixearon los tipos de attachment para que incluyan `content_type` real. Commit y push a main. Pendiente: configurar env vars en Vercel.
+
+### Orden de implementación (7 pasos secuenciales)
+
+**Paso 1 — `src/services/ai/types.ts`:**
+Interfaces canónicas del sistema de IA. Todo el sistema habla este contrato. Ningún archivo fuera de `ai/` importa tipos de Claude directamente.
+
+| Interfaz | Propósito |
+|---|---|
+| `AdjuntoCanónico` | URL, tipo (image/pdf/otro), mimeType |
+| `EntradaCanónica` | Input unificado: texto, adjuntos, contacto, timestamp |
+| `RespuestaCanónica` | Output completo: clasificación (A–K), datos paciente, flags, confianza, resumen |
+| `AIProvider` | Contrato del adapter: `analizarCaso(entrada): Promise<RespuestaCanónica>` |
+| `AIError` | Error tipado con código: `AI_TIMEOUT`, `AI_PROVIDER_ERROR`, `AI_PARSE_ERROR`, etc. |
+| `ConfianzaCampos` | Score por campo individual |
+
+**Paso 2 — `src/services/ai/imageProcessor.ts`:**
+Descarga adjuntos de Callbell y los convierte a base64 para Claude. Las URLs de Callbell expiran; Claude no puede hacer fetch externo.
+
+| Parámetro | Valor |
+|---|---|
+| Timeout de descarga | 8 segundos |
+| Tamaño máximo | 4 MB |
+| Formatos soportados | `image/jpeg`, `image/png`, `image/webp`, `image/gif`, `application/pdf` |
+| Falla de descarga | No bloquea — análisis continúa con solo texto |
+
+**Paso 3 — `src/services/ai/claudeAdapter.ts`:**
+Corazón de la integración. Implementa `AIProvider` con Claude Sonnet 4.5.
+
+| Parámetro | Valor | Razón |
+|---|---|---|
+| `model` | `claude-sonnet-4-5` | Especificado en el plan |
+| `max_tokens` | 1024 | La respuesta de una tool es compacta |
+| `tool_choice` | `{ type: "any" }` | Forzar invocación de tool, nunca texto libre |
+| System prompt | ~250 tokens | Denso, sin relleno |
+| Tools | `registrar_analisis_caso` con 22 campos | Schema exacto del plan |
+
+**Tool `registrar_analisis_caso`:**
+- **Obligatorios**: `tipo_caso` (A–K), `prioridad`, `paciente_nombre`, `practica`, `tipo_practica`, `confianza_global`, `confianza_campos`, `resumen`, `flags`
+- **Opcionales**: `paciente_dni`, `obra_social`, `nro_afiliado`, `nro_carnet`, `medico_derivante`, `matricula`, `diagnostico`, `motivo_solicitud`
+- **Clasificación A–K**: desde "Turno con orden médica" hasta "Contacto equivocado"
+- **Flags 🤖**: `ayuno`, `aines`, `orden_incompleta`, `orden_ilegible`
+
+**Paso 4 — `src/services/ai/mockProvider.ts`:**
+Mock para desarrollo local (`PRIMARY_PROVIDER=mock`). Responde en 50ms con datos realistas: tipo_caso "A", obra_social "IOMA", práctica "Ecografía abdominal completa". Sin consumo de tokens de Anthropic.
+
+**Paso 5 — `src/services/ai/aiFactory.ts`:**
+Factory singleton que lee `PRIMARY_PROVIDER` de env vars.
+
+| Escenario | Comportamiento |
+|---|---|
+| `PRIMARY_PROVIDER=claude` + `ANTHROPIC_API_KEY` presente | Instancia `ClaudeAdapter` |
+| `PRIMARY_PROVIDER=claude` pero sin API key | ClaudeAdapter constructor lanza error → factory cae en `MockAIProvider` |
+| `PRIMARY_PROVIDER=mock` (default) | Instancia `MockAIProvider` |
+| `PRIMARY_PROVIDER` desconocido | Log warning + fallback a `MockAIProvider` |
+
+**Paso 6 — webhookHandler.ts: reemplazar TODO + 3 ramas:**
+Se reemplazó el `// TODO: [Fase 3]` con una llamada real a `getAIProvider().analizarCaso(entrada)`.
+
+**Mejora adicional: 3 ramas en handleMessageCreated:**
+
+| Rama | Condición | Acción |
+|---|---|---|
+| **Rama 1** | Caso existe y `estado !== "cerrado"` | `updateCasoHistorial()` (sin cambios) |
+| **Rama 2** | Caso existe y `estado === "cerrado"` | `reabrirCaso()` + re-analizar con IA + `actualizarExtraccionIA()` + update tipo_caso/prioridad |
+| **Rama 3** | No existe | Análisis IA + `createCaso(analisis)` (camino normal) |
+
+La RAMA 2 resuelve el error 23505 (UNIQUE constraint violation en `callbell_conversation_uuid`) que ocurría cuando Callbell reabría una conversación cerrada reutilizando el mismo UUID. En lugar de intentar crear un caso nuevo (que choca contra la constraint), se reabre el existente.
+
+**Paso 7 — casoService.ts: createCaso acepta analisis param:**
+`createCaso()` ahora acepta `analisis?: RespuestaCanónica`. Si viene, usa datos reales para poblar todos los campos de `casos` y `extracciones_ia`. Si no, usa placeholders seguros.
+
+**Función `buildFlags()`:**
+Combina flags de dos orígenes en un solo array:
+
+| Origen | Flags | Condición |
+|---|---|---|
+| 🤖 Claude | `ayuno`, `aines`, `orden_incompleta`, `orden_ilegible` | Detectadas por IA |
+| ⚙️ Sistema | `baja_confianza` | `confianza_global < 0.7` o `campos_baja_confianza.length > 0` |
+| ⚙️ Sistema | `token_ioma` | `obra_social` contiene "ioma" |
+| ⚙️ Sistema | `chiclana` | `tipo_practica` es de Medicina Nuclear |
+| ⚙️ Sistema | `orden_digital_misrx` | Mensaje contiene link de MisRx |
+| ⚙️ Sistema | `error_ia` | `analisis === null` (Claude falló) |
+
+**Funciones nuevas:**
+- `reabrirCaso(supabase, casoId)` — resetea `estado→pendiente`, `closing_reason→null`, `resolved_at→null`
+- `actualizarExtraccionIA(supabase, casoId, analisis, parsed)` — UPDATE de `extracciones_ia` con datos frescos de IA, reusa `buildFlags()`
+
+### Fix de tipos de attachment (mid-session)
+
+**Problema detectado por el usuario:** `ParsedAttachment` no tenía `content_type` ni `file_name`. El webhookHandler hardcodeaba `mimeType: "image/jpeg"` para todas las imágenes.
+
+**Fix aplicado en 3 archivos:**
+
+| Archivo | Cambio |
+|---|---|
+| `types.ts` | Nuevo tipo `CallbellAttachmentPayload` (url, content_type, file_name, size). `attachments` ahora acepta `(string \| CallbellAttachmentPayload)[]`. `ParsedAttachment` incluye `content_type: string \| null` y `file_name: string \| null`. |
+| `payloadParser.ts` | Nueva función `inferMimeType()` que infiere MIME type de la extensión. Nueva `parseAttachment()` que maneja tanto strings como objetos. Backward compatible con payloads existentes. |
+| `webhookHandler.ts` | Mapping de adjuntos usa `att.content_type` directamente. Función duplicada `inferMimeTypeDeUrl` eliminada. Fallback a `"application/octet-stream"` para tipos desconocidos. |
+
+### Deploy
+
+| Paso | Estado |
+|---|---|
+| `@anthropic-ai/sdk` instalado | ✅ |
+| `npx tsc -b --noEmit` | ✅ 0 errores (verificado después de cada archivo) |
+| Code review (deepseek-flash) | ✅ Sin issues bloqueantes |
+| `git add -A && git commit` | ✅ `9a2a7ed` |
+| `git push origin main` | ✅ Vercel auto-deploy iniciado |
+| `PRIMARY_PROVIDER=claude` en Vercel | ⬜ Pendiente — configurar por dashboard |
+| `ANTHROPIC_API_KEY` en Vercel | ⬜ Pendiente — configurar por dashboard |
+
+### Archivos Creados (5 nuevos)
+
+| Archivo | Propósito |
+|---|---|
+| `src/services/ai/types.ts` | Interfaces canónicas (EntradaCanónica, RespuestaCanónica, AIProvider, AIError) |
+| `src/services/ai/imageProcessor.ts` | Descarga adjuntos → base64 (8s timeout, 4MB max, fallback graceful) |
+| `src/services/ai/claudeAdapter.ts` | Claude Sonnet 4.5 con tool_use, visión, system prompt ~250 tokens |
+| `src/services/ai/mockProvider.ts` | Mock para desarrollo (50ms, datos realistas, sin consumir tokens) |
+| `src/services/ai/aiFactory.ts` | Factory singleton con fallback a mock |
+
+### Archivos Modificados (4 existentes)
+
+| Archivo | Cambio |
+|---|---|
+| `src/services/callbell/types.ts` | CallbellAttachmentPayload, attachments type biforma, ParsedAttachment con content_type/file_name |
+| `src/services/callbell/payloadParser.ts` | parseAttachment(), inferMimeType(), soporte string/object |
+| `src/services/callbell/webhookHandler.ts` | 3 ramas (activo/cerrado/nuevo), IA integration, conversation_opened logging, content_type real |
+| `src/services/supabase/casoService.ts` | createCaso acepta analisis param, buildFlags(), reabrirCaso(), actualizarExtraccionIA() |
+
+### Decisiones Tomadas
+
+| Decisión | Alternativa | Razón |
+|---|---|---|
+| **Provider-agnostic** (AIProvider interface) | Llamar a Claude directamente en webhookHandler | Separación de responsabilidades. Permite mock en dev, Claude en prod, futuro GPT sin cambiar webhookHandler |
+| **tool_use con `tool_choice: any`** | JSON en texto libre del prompt | Output determinista y parseable. Claude no puede negarse a devolver la estructura esperada |
+| **max_tokens 1024** | 4096 o más | La respuesta de una tool es compacta (~500 tokens con imagen). 1024 es guarda suficiente, reduce costo y latencia |
+| **Fallback a mock siempre** | Dejar que la excepción se propague | Cero casos perdidos por error de IA. El caso llega al panel con flag `error_ia` |
+| **3 ramas en webhookHandler** | 2 ramas (como estaba) | Resuelve error 23505: Callbell reabre conversaciones cerradas con el mismo UUID |
+| **attachment type biforma (string/object)** | Solo object | Backward compatibility con payloads string[] existentes en producción |
+| **buildFlags en casoService.ts** | En webhookHandler o en una lib separada | Ya se usa en createCaso y actualizarExtraccionIA, ambos en casoService. Evita duplicación |
+
+### Lecciones Aprendidas
+
+| Lección | Detalle |
+|---|---|
+| **Adjuntos Callbell** | Pueden ser strings (solo URL) u objetos (url + content_type + file_name). El parser debe manejar ambos |
+| **Conversaciones reabiertas** | Callbell reutiliza el mismo UUID al reabrir una conversación cerrada. No se puede crear caso nuevo (UNIQUE violation) |
+| **content_type no es opcional** | imageProcessor.ts necesita el MIME type real para filtrar formatos procesables. Hardcodear "image/jpeg" rompe PNGs |
+| **Code review iterativo** | El code reviewer detectó la duplicación de `inferMimeTypeDeUrl` — se eliminó en la iteración siguiente |
+
+### Estado al Cierre
+
+- ✅ **Fase 3 completa**: 5 archivos nuevos + modificaciones a webhookHandler y casoService
+- ✅ **Claude API integrada**: tool_use con `registrar_analisis_caso`, visión para órdenes médicas
+- ✅ **Provider-agnostic**: AIProvider interface, factory singleton, mock en dev, Claude en prod
+- ✅ **Reapertura de casos cerrados**: reabrirCaso() + actualizarExtraccionIA() + buildFlags()
+- ✅ **Attachment types fixeados**: content_type real, soporte string/object
+- ✅ **conversation_opened logueado**: sin acción en v1
+- ✅ **Typecheck 0 errores** (verificado post-implementación y post-fixes)
+- ✅ **Commit + push a main**: `9a2a7ed` — Vercel auto-deploy
+- ⬜ **PRIMARY_PROVIDER=claude** pendiente de configurar en Vercel
+- ⬜ **ANTHROPIC_API_KEY** pendiente de configurar en Vercel
+- ⬜ **Prueba con IA real** pendiente (enviar mensaje desde WhatsApp)
+- 🔑 **Próximo paso:** Configurar env vars en Vercel + probar webhook con IA real
+
+### Pendientes para la Próxima Sesión
+
+- [ ] Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production
+- [ ] Probar webhook con mensaje real (con y sin imagen) desde WhatsApp
+- [ ] Verificar log esperado: `[STEP 5.IA] Análisis completado — tipo: A, confianza: 0.87`
+- [ ] Verificar en Supabase que `extracciones_ia` tenga datos reales (no placeholders)
+- [ ] Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 a función helper
+- [ ] Conectar frontend a datos reales de Supabase
+
+---
 
 ## Sesión 23 — 2026-06-14 — Debugging Webhook + Root Cause Fix (process-first) + Primer Caso en Supabase
 

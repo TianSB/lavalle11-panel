@@ -1,8 +1,8 @@
 # TODO — Plan de Trabajo y Seguimiento
 
 > **Proyecto:** Panel de Gestión de Turnos con IA — Instituto Lavalle 11
-> **Última actualización:** 2026-06-14 (Sesión 23)
-> **Progreso general:** ~71% (91/128 tareas completadas) — Fases 0 a 2.3 completas ✅
+> **Última actualización:** 2026-06-14 (Sesión 24)
+> **Progreso general:** ~82% (114/139 tareas completadas) — Fases 0 a 3 completas ✅
 >
 > **Leyenda:** ✅ Completo | 🔄 En progreso | ⬜ Pendiente | ❌ Bloqueado | 🟡 En revisión
 
@@ -54,54 +54,29 @@
 ## Fase 2.2 — Backend + Webhook de Callbell
 
 **Objetivo:** El panel recibe casos reales de Callbell.
-**Estado: ✅ COMPLETADA. Webhook funcional en Vercel. Primer caso creado (LV-0001).**
+**Estado: ✅ COMPLETADA.**
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.2.1 | Definir tipos del payload de Callbell | ✅ | src/services/callbell/types.ts (corregido con payload real) |
-| 2.2.2 | Implementar payloadParser | ✅ | src/services/callbell/payloadParser.ts (corregido con estructura real) |
-| 2.2.3 | Crear CasoService server-side | ✅ | src/services/supabase/casoService.ts |
-| 2.2.4 | Implementar webhookHandler | ✅ | src/services/callbell/webhookHandler.ts |
-| 2.2.5 | Crear endpoint POST /api/callbell/webhook | ✅ | api/callbell/webhook.ts |
-| 2.2.6 | Implementar health check (GET) | ✅ | Responde { status: "ok" } |
-| 2.2.7 | Implementar validación por secret token | ✅ | CALLBELL_WEBHOOK_SECRET |
-| 2.2.8 | Implementar respond-first pattern | ✅ | 200 inmediato, await final |
-| 2.2.9 | Detección de MisRx (orden_tipo + flag) | ✅ | misrx.com.ar/prestacion |
-| 2.2.10 | Documentar .env.local con nuevas variables | ✅ | |
+| 2.2.1–2.2.10 | Webhook funcional | ✅ | Ver SESSION_LOG Sesión 8 |
 
-**🔴 Deploy fixes aplicados en Sesión 18 + Sesión 22 + Sesión 23:**
+**🔴 Deploy fixes (Sesiones 18, 22, 23):**
 
 | # | Tarea | Estado |
 |---|---|---|
-| D1 | Agregar .js extensions a imports ESM | ✅ |
-| D2 | Eliminar bloque functions inválido de vercel.json | ✅ |
-| D3 | Instalar @types/node para TS2580 | ✅ |
-| D4 | Corregir parser para payload real de Callbell | ✅ |
-| D5 | Reemplazar fire-and-forget por try/await/catch | ✅ |
-| D6 | **Diagnosticar bloqueo query Supabase** | ✅ **Resuelto — process-first pattern** |
-| D7 | Agregar fetch directo con timeout para diagnóstico | ✅ (eliminado post-fix) |
-| D8 | Resolver conectividad Vercel → Supabase | ✅ **Root cause: Vercel Hobby mata async después de res.json()** |
-| D9 | Eliminar logs temporales de diagnóstico | ✅ |
+| D1–D9 | Deploy fixes + process-first + migración 014 | ✅ |
 
 **🔵 Sistema de Auditoría Final (Sesión 22):**
 
-| # | Tarea | Estado | Archivo |
-|---|---|---|---|
-| A1–A11 | Sistema de auditoría dual + idempotencia + timeout | ✅ | Ver SESSION_LOG Sesión 22 |
+| # | Tarea | Estado |
+|---|---|---|
+| A1–A11 | Sistema de auditoría dual + idempotencia + timeout | ✅ |
 
 **🟢 Debugging Webhook + Root Cause Fix (Sesión 23):**
 
 | # | Tarea | Estado |
 |---|---|---|
-| B1 | Fetch directo con AbortController 5s para diagnóstico | ✅ |
-| B2 | Fix env vars Preview→Production en Vercel | ✅ |
-| B3 | Forzar invalidación de caché de Vercel (version bump) | ✅ |
-| B4 | Diagnóstico sincrónico [DIAG-1] (confirmar env vars correctas) | ✅ |
-| B5 | Eliminar global.fetch override (interfería con postgrest-js) | ✅ |
-| B6 | **Process-first pattern (causa raíz)** | ✅ |
-| B7 | Primer caso creado en Supabase: LV-0001 | ✅ |
-| B8 | Limpiar logs de diagnóstico temporales | ✅ |
-| B9 | **Ejecutar migración 014 en Supabase** | ✅ **Ejecutada — LV-0002 creado sin errores** |
+| B1–B9 | Diagnóstico + process-first + primer caso real | ✅ |
 
 ---
 
@@ -112,29 +87,50 @@
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.3.1 | Implementar GET /api/casos | ✅ | `api/casos.ts` — lista paginada con filtros (estado, asesor_id, limit, offset) + count filtrado |
-| 2.3.2 | Implementar GET /api/casos/:id | ✅ | `api/casos/[id].ts` — caso individual con joins + mensajes ordenados, 404 handling |
+| 2.3.1 | Implementar GET /api/casos | ✅ | `api/casos.ts` — lista paginada con filtros + count filtrado |
+| 2.3.2 | Implementar GET /api/casos/:id | ✅ | `api/casos/[id].ts` — caso individual con joins + 404 handling |
 | 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | **Diferido a Fase 4** — requiere Callbell Messages API |
-| 2.3.4 | Conectar Supabase Realtime al frontend | ✅ | Ya implementado en `useCaseRealtimeSync.ts` (Sesión anterior) |
-| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ | Ya implementado en `supabaseService.ts` vía `CasoServiceProvider` (Sesión anterior) |
+| 2.3.4 | Conectar Supabase Realtime al frontend | ✅ | `useCaseRealtimeSync.ts` |
+| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ | `supabaseService.ts` vía `CasoServiceProvider` |
 
 ---
 
-## Fase 3 — Análisis con Claude IA
+## Fase 3 — Análisis con Claude IA ✅
 
 **Objetivo:** Las cards aparecen con datos prellenados y resumen de IA.
-**Dependencia:** Fase 2 completa (requiere webhook funcional con datos reales)
+**Estado: ✅ COMPLETADA en Sesión 24.**
+
+| # | Tarea | Estado | Archivo | Notas |
+|---|---|---|---|---|
+| 3.1 | Definir interfaces canónicas (EntradaCanónica, RespuestaCanónica, AIProvider, AIError) | ✅ | `src/services/ai/types.ts` | Contrato único, independiente del provider |
+| 3.2 | Implementar descarga de adjuntos (imageProcessor) | ✅ | `src/services/ai/imageProcessor.ts` | 8s timeout, 4MB max, fallback graceful |
+| 3.3 | Implementar ClaudeAdapter con tool_use y visión | ✅ | `src/services/ai/claudeAdapter.ts` | `claude-sonnet-4-5`, `max_tokens: 1024`, `tool_choice: any` |
+| 3.4 | Implementar MockAIProvider para desarrollo | ✅ | `src/services/ai/mockProvider.ts` | 50ms simulación, respuestas realistas |
+| 3.5 | Implementar aiFactory singleton con fallback a mock | ✅ | `src/services/ai/aiFactory.ts` | Lee `PRIMARY_PROVIDER` env var |
+| 3.6 | Conectar IA en webhookHandler (reemplazar TODO) | ✅ | `src/services/callbell/webhookHandler.ts` | 3 ramas: activo / cerrado / nuevo |
+| 3.7 | createCaso acepta analisis param opcional | ✅ | `src/services/supabase/casoService.ts` | Backward compatible |
+| 3.8 | Implementar buildFlags (flags IA + flags sistema) | ✅ | `src/services/supabase/casoService.ts` | 🤖 + ⚙️ combinados |
+| 3.9 | Implementar reabrirCaso para casos cerrados | ✅ | `src/services/supabase/casoService.ts` | Resetea estado + re-analiza con IA |
+| 3.10 | Implementar actualizarExtraccionIA | ✅ | `src/services/supabase/casoService.ts` | UPDATE por caso_id, reusa buildFlags |
+| 3.11 | Agregar conversation_opened al switch de eventos | ✅ | `src/services/callbell/webhookHandler.ts` | Log explícito, sin acción |
+| 3.12 | Soportar adjuntos como objetos con content_type | ✅ | `src/services/callbell/types.ts` + `payloadParser.ts` | `CallbellAttachmentPayload`, backward compat string[] |
+| 3.13 | Instalar @anthropic-ai/sdk | ✅ | `package.json` | SDK oficial Anthropic para Node.js |
+| 3.14 | Commit + push a main | ✅ | `9a2a7ed` | Auto-deploy Vercel |
+
+### Pendientes post-Fase 3
 
 | # | Tarea | Estado |
 |---|---|---|
-| 3.1–3.13 | Integración de Claude API | ⬜ (13 tareas, 0%) |
+| 3.15 | Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel | ⬜ |
+| 3.16 | Probar webhook con IA real desde WhatsApp | ⬜ |
+| 3.17 | Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 | ⬜ |
 
 ---
 
 ## Fase 4 — Acciones del Asesor (Flujo Completo)
 
 **Objetivo:** El flujo completo funciona de punta a punta (WhatsApp → panel → WhatsApp).
-**Dependencia:** Fase 3 completada
+**Dependencia:** Fase 3 completada (✅ lista para arrancar)
 
 | # | Tarea | Estado |
 |---|---|---|
@@ -160,6 +156,8 @@
 | 014 | Migración orden_tipo en extracciones_ia | ✅ | TEXT + CHECK |
 | — | Hallazgo MisRx — órdenes digitales | ✅ | Documentado |
 | — | Respond-first pattern corregido (await) | ✅ | try/await/catch |
+| — | Attachment type biforma (string/object) + content_type | ✅ | `payloadParser.ts` + `types.ts` |
+| — | Reapertura de casos cerrados | ✅ | `reabrirCaso()` + `actualizarExtraccionIA()` |
 
 ---
 
@@ -171,9 +169,12 @@
 | **Fase 1** — Panel estático | 20 | 19 | 0 | 1 | **95%** |
 | **Fase 1.5** — Refactor QA | 10 | 10 | 0 | 0 | **100%** |
 | **Fase 2.1** — Supabase Auth | 12 | 12 | 0 | 0 | **100%** |
-| **Fase 2.2** — Backend + Webhook | 28 | 27 | 0 | 1 | **96%** |
+| **Fase 2.2** — Backend + Webhook | 28 | 28 | 0 | 0 | **100%** |
 | **Fase 2.3** — Realtime + REST | 5 | 4 | 0 | 1 | **80%** |
-| **Fase 3** — Claude IA | 13 | 0 | 0 | 13 | **0%** |
+| **Fase 3** — Claude IA | 17 | 14 | 0 | 3 | **82%** |
 | **Fase 4** — Acciones asesor | 10 | 0 | 0 | 10 | **0%** |
 | **Fase 5** — Métricas | 8 | 0 | 0 | 8 | **0%** |
-| **Total general** | **128** | **91** | **0** | **37** | **~71%** |
+| **Otros** | 6 | 6 | 0 | 0 | **100%** |
+| **Total general** | **139** | **114** | **0** | **25** | **~82%** |
+
+> Nota: Fase 3 tiene 3 pendientes post-implementación (configurar env vars en Vercel, probar con IA real, refactor menor). El core de la fase está 100% implementado y compilando.

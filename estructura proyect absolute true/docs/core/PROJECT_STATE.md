@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-14
-> **Versión:** 1.6 — Fase 2.3 completa. GET /api/casos y GET /api/casos/:id implementados. ✅ Fases 0 a 2.3 completadas.
+> **Última actualización:** 2026-06-14 (Sesión 24)
+> **Versión:** 2.0 — Fase 3 completa. Claude API integrada con tool_use y visión. Reapertura de casos cerrados. ✅ Fases 0 a 3 completadas.
 
 ---
 
@@ -29,13 +29,13 @@
 | **Fase 1 — Panel estático + Auth** | ✅ Completada | 100% |
 | **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
-| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% — Webhook funcional, primer caso creado |
-| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | **100%** — GET endpoints + Realtime + Service layer existentes |
-| Fase 3 — Análisis con Claude IA | ⬜ Pendiente | 0% |
+| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% |
+| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | 100% |
+| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100%** — Provider-agnostic, tool_use, visión, mock, reapertura casos |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Ejecutar migración 014 en Supabase. Luego Fase 3 (IA) o mejoras de UI.
+**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production para activar IA real. Luego Fase 4 o mejoras de UI.
 
 ---
 
@@ -65,27 +65,29 @@ El sistema propuesto:
 |---|---|---|---|
 | Frontend | React + Vite + Tailwind CSS | React 19 | ✅ Implementado + Refactorizado |
 | Lenguaje | **TypeScript estricto** — frontend y backend | — | ✅ Confirmado |
-| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook funcional. Process-first pattern. Primer caso creado.** |
+| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook funcional. Process-first pattern. IA integrada.** |
 | Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 14 migraciones ejecutadas, RLS activo, orden_tipo funcional |
 | Auditoría | Sistema dual: trigger ultra-liviano + AuditService Node.js | — | ✅ **Implementado: event_hash UNIQUE, correlationId obligatorio, domain_events view** |
 | Auth | Supabase Auth (@supabase/supabase-js) | v2.108.1 | ✅ Login real, logout, sesión, roles |
-| IA | Claude API (Anthropic) — Provider-agnostic | — | ✅ Arquitectura diseñada y auditada |
-| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook funcional. Mensajes procesados. Casos creados.** |
-| Config remota | Google Sheets API | v4 | ⬜ Pendiente (Fase 3) |
+| IA | Claude API (Anthropic) — Provider-agnostic | `claude-sonnet-4-5` | ✅ **Integrado: adapter con tool_use, visión, buildFlags, factory singleton** |
+| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook funcional. Adjuntos con content_type real.** |
+| Config remota | Google Sheets API | v4 | ⬜ Pendiente (puede integrarse en Fase 4) |
 | Llamadas de voz | WhatsApp Desktop via wa.me/ | — | Fuera del sistema |
 | Repositorio | GitHub | — | ✅ **lavalle11-panel (TianSB)** |
 | Hosting | Vercel | — | ✅ **Deploy activo. Hobby plan.** |
 
 ---
 
-## 5. Estado del Webhook (Fase 2.2)
+## 5. Estado del Webhook (Fase 3)
 
 ### Flujo actual — COMPLETO ✅
 
 ```
 WhatsApp → Callbell → Webhook Vercel → handleWebhook()
   → findByCallbellUuid() → busca caso existente por conversation_uuid
-  → createCaso() → INSERT en casos + extracciones_ia + audit
+  → RAMA 1: activo → updateCasoHistorial()
+  → RAMA 2: cerrado → reabrirCaso() + getAIProvider().analizarCaso() + actualizarExtraccionIA()
+  → RAMA 3: no existe → getAIProvider().analizarCaso() + createCaso()
   → response 200 OK
 ```
 
@@ -98,19 +100,10 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 | TS2580: Cannot find name 'process' | ✅ Resuelto | Instalar @types/node |
 | Parser incompatible con payload real | ✅ Resuelto | Reescritura de types.ts + payloadParser.ts |
 | Vercel mata proceso (fire-and-forget) | ✅ Resuelto | try { await handleWebhook() } catch |
-| Trigger con jsonb_each (riesgo de bloqueo) | ✅ Resuelto | Trigger ultra-liviano: solo INSERT snapshot |
-| event_hash sin correlationId (colisiones) | ✅ Resuelto | SHA-256 incluye correlationId |
-| correlationId opcional (sin trazabilidad) | ✅ Resuelto | Obligatorio en todos los tipos |
-| Supabase client sin timeout | ✅ Resuelto | AbortSignal.timeout(10_000) en fetch |
-| Build falló (webhookHandler.ts faltante) | ✅ Resuelto | Commit d86f45c |
-| **Query Supabase bloqueada (CAUSA RAÍZ)** | ✅ **Resuelto** | **Process-first: await handleWebhook() ANTES de res.json()** |
+| Query Supabase bloqueada (CAUSA RAÍZ) | ✅ **Resuelto** | **Process-first: await handleWebhook() ANTES de res.json()** |
 | global.fetch override rompía postgrest-js | ✅ Resuelto | Eliminado el override. Env vars correctas. |
-
-### Problema actual
-
-| Síntoma | Causa | Estado |
-|---|---|---|
-| `PGRST204: Could not find 'orden_tipo' column` | Migración 014 no ejecutada en Supabase | ⚠️ **Pendiente** |
+| **error 23505: Caso cerrado bloquea nuevos mensajes** | ✅ **Resuelto** | **RAMA 2: reabrirCaso() + actualizarExtraccionIA()** |
+| **Adjuntos sin content_type** | ✅ **Resuelto** | **CallbellAttachmentPayload + parseAttachment() biforma** |
 
 ### Variables de Entorno en Vercel
 
@@ -119,6 +112,8 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 | `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada (Production) |
 | `SUPABASE_URL` | ✅ Configurada (Production) |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ Configurada (Production) |
+| `PRIMARY_PROVIDER` | ⬜ **Pendiente — configurar "claude"** |
+| `ANTHROPIC_API_KEY` | ⬜ **Pendiente — configurar sk-ant-...** |
 | `VITE_SUPABASE_URL` | ⬜ Frontend no deployado aún |
 | `VITE_SUPABASE_ANON_KEY` | ⬜ Frontend no deployado aún |
 
@@ -161,79 +156,138 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 
 ---
 
-## 7. Estructura del Proyecto
+## 7. Arquitectura de IA (Fase 3)
+
+### Provider-agnostic
+
+```
+webhookHandler.ts
+    │
+    ▼
+getAIProvider()  ← aiFactory.ts (singleton)
+    │
+    ├── PRIMARY_PROVIDER=claude → ClaudeAdapter
+    │     ├── imageProcessor.ts (descarga adjuntos → base64)
+    │     └── Anthropic SDK (tool_use: "registrar_analisis_caso")
+    │
+    └── PRIMARY_PROVIDER=mock → MockAIProvider (respuestas realistas, 50ms)
+```
+
+### Contrato canónico (types.ts)
+
+| Interfaz | Propósito |
+|---|---|
+| `EntradaCanónica` | Input unificado: texto, adjuntos, contacto, timestamp |
+| `RespuestaCanónica` | Output completo: clasificación, datos paciente, flags, confianza, resumen |
+| `AIProvider` | Contrato del adapter: `analizarCaso(entrada): Promise<RespuestaCanónica>` |
+| `AIError` | Error tipado con código: `AI_TIMEOUT`, `AI_PROVIDER_ERROR`, etc. |
+
+### Token efficiency
+
+- Modelo: `claude-sonnet-4-5`
+- `max_tokens: 1024` — respuesta de tool es compacta
+- `tool_choice: { type: "any" }` — forzar invocación de tool, nunca texto libre
+- System prompt ~250 tokens — denso, sin relleno
+- Una sola llamada por caso, sin multi-turn
+
+### Resiliencia
+
+- Si Claude falla → `analisisIA = null` → placeholders + flag `error_ia`
+- Si imagen no se descarga → análisis continúa con solo texto
+- Si `ANTHROPIC_API_KEY` falta → factory cae en MockAIProvider
+- Cero casos perdidos por error de IA
+
+### Sistema de flags (dual)
+
+| Origen | Flags | Responsable |
+|---|---|---|
+| 🤖 Claude detecta | `ayuno`, `aines`, `orden_incompleta`, `orden_ilegible` | ClaudeAdapter |
+| ⚙️ Sistema aplica | `baja_confianza`, `token_ioma`, `chiclana`, `error_ia`, `orden_digital_misrx` | `buildFlags()` en casoService.ts |
+
+---
+
+## 8. Estructura del Proyecto
 
 ```
 /
 ├── api/
 │   ├── _lib/
-│   │   └── supabaseAdmin.ts    # Shared getSupabaseAdmin() + CASOS_SELECT (NUEVO)
-│   ├── casos.ts                # GET /api/casos — lista paginada con filtros (NUEVO)
+│   │   └── supabaseAdmin.ts      # Shared getSupabaseAdmin() + CASOS_SELECT
+│   ├── casos.ts                  # GET /api/casos — lista paginada con filtros
 │   ├── casos/
-│   │   └── [id].ts             # GET /api/casos/:id — caso individual + mensajes (NUEVO)
+│   │   └── [id].ts               # GET /api/casos/:id — caso individual + mensajes
 │   └── callbell/
-│       └── webhook.ts          # Serverless Function — process-first pattern
+│       └── webhook.ts            # Serverless Function — process-first pattern
 ├── src/
 │   ├── services/
-│   │   ├── auditService.ts     # AuditService con 4 funciones semánticas
+│   │   ├── ai/                   # ★ NUEVO — Capa de IA (Fase 3)
+│   │   │   ├── types.ts          #   Interfaces canónicas (EntradaCanónica, RespuestaCanónica, etc.)
+│   │   │   ├── imageProcessor.ts #   Descarga adjuntos → base64 (8s timeout, 4MB max)
+│   │   │   ├── claudeAdapter.ts  #   Claude Sonnet 4.5 con tool_use y visión
+│   │   │   ├── mockProvider.ts   #   Mock para desarrollo sin consumir tokens
+│   │   │   └── aiFactory.ts      #   Factory singleton con fallback a mock
+│   │   ├── auditService.ts       # AuditService con 4 funciones semánticas
 │   │   ├── callbell/
-│   │   │   ├── types.ts        # Tipos del payload de Callbell
-│   │   │   ├── payloadParser.ts # Parseador
-│   │   │   └── webhookHandler.ts # Lógica de negocio + correlationId
+│   │   │   ├── types.ts          # Tipos del payload de Callbell (incluye CallbellAttachmentPayload)
+│   │   │   ├── payloadParser.ts  # Parseador con soporte attachment string/object + content_type
+│   │   │   └── webhookHandler.ts # Lógica de negocio + IA + 3 ramas (activo/cerrado/nuevo)
 │   │   ├── supabase/
-│   │   │   └── casoService.ts  # CRUD server-side + auditCasoCreado
-│   │   └── mockService.ts      # Mock service (frontend)
+│   │   │   └── casoService.ts    # CRUD server-side + reabrirCaso + actualizarExtraccionIA + buildFlags
+│   │   └── mockService.ts        # Mock service (frontend)
 │   ├── lib/
-│   │   └── supabase.ts         # Cliente Supabase (frontend)
+│   │   └── supabase.ts           # Cliente Supabase (frontend)
 │   ├── types/
-│   │   └── index.ts            # Tipos compartidos
+│   │   └── index.ts              # Tipos compartidos
 │   ├── hooks/
-│   │   └── useCasos.ts         # Hook de casos con service layer
+│   │   └── useCasos.ts           # Hook de casos con service layer
 │   ├── context/
-│   │   └── AuthContext.tsx      # Contexto de autenticación
-│   ├── components/              # Componentes React
-│   ├── pages/                   # Páginas
+│   │   └── AuthContext.tsx        # Contexto de autenticación
+│   ├── components/               # Componentes React
+│   ├── pages/                    # Páginas
 │   └── data/
-│       └── mockCases.ts        # Datos mock
+│       └── mockCases.ts          # Datos mock
 ├── database/
 │   └── migrations/
-│       ├── 001_enums.sql       # 22 ENUMs
-│       ├── ...
-│       ├── 010_auditoria_eventos.sql  # Sistema de auditoría FINAL (actualizado)
-│       └── 014_orden_tipo.sql  # Campo orden_tipo para MisRx
+│       ├── 001_enums.sql
+│       ├── ... (14 migraciones total)
+│       └── 014_orden_tipo.sql
 └── docs/
     └── core/
-        ├── PROJECT_STATE.md    # ← Este archivo
-        ├── ARCHITECTURE.md     # Arquitectura del sistema
-        ├── DECISIONS.md        # Decisiones técnicas (ADRs)
-        ├── TODO.md             # Plan de trabajo
-        └── SESSION_LOG.md      # Registro de sesiones
+        ├── PROJECT_STATE.md      # ← Este archivo
+        ├── ARCHITECTURE.md
+        ├── DECISIONS.md
+        ├── TODO.md
+        └── SESSION_LOG.md
 ```
 
 ---
 
-## 8. Riesgos Activos
+## 9. Riesgos Activos
 
 | # | Riesgo | Impacto | Severidad | Estado |
 |---|---|---|---|---|
-| R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza) |
-| R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID) |
+| R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza + revisión manual) |
+| R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID + RAMA 1/2 detectan casos existentes) |
 | R10 | Cold starts de Vercel Serverless | Bajo | 🟢 Bajo | Aceptable |
-| R12 | Migración 014 no ejecutada (error PGRST204) | Medio | ✅ Resuelto | Migración ejecutada — LV-0002 creado sin errores |
+| R13 | Límite de tiempo Vercel Hobby (10s) para análisis IA con imágenes | Medio | 🟡 Alto | 🟡 Mitigado: max_tokens 1024, timeout descarga 8s, una sola llamada |
 
 ---
 
-## 9. Próximos Pasos Inmediatos
+## 10. Próximos Pasos Inmediatos
 
-1. 🟢 **Pendiente** — Probar endpoints REST: `GET /api/casos?limit=5`
-2. 🟢 **Pendiente** — Configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en Vercel Production
-3. ⬜ **Siguiente fase** — Fase 3: Análisis con Claude IA
+1. 🟢 **Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY`** en Vercel Production
+2. 🟢 **Probar webhook con IA real**: enviar mensaje desde WhatsApp y verificar logs
+3. ⬜ **Revisar frontend**: conectar DashboardPage a datos reales de Supabase
+4. ⬜ **Refactor menor**: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 en webhookHandler
+5. ⬜ **Siguiente fase**: Fase 4 — Acciones del asesor o mejoras de UI
 
 ---
 
-## 10. Contacto y Referencias
+## 11. Contacto y Referencias
 
 - **PRD original:** `PRD_Lavalle11_v1.docx`
 - **Autor PRD:** RIA · r-ia.vercel.app
 - **Repositorio:** `github.com:TianSB/lavalle11-panel`
+- **Dominio:** `https://l11panel.vercel.app`
+- **Último commit:** `9a2a7ed` — `feat(ia): Fase 3 completa — integración Claude API + reapertura de casos cerrados`
 - **Documentación completa:** Ver `docs/` y archivos maestros en raíz
