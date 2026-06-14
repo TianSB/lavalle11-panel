@@ -11,12 +11,16 @@
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload } from "./types.js";
+import type { AdjuntoCanónico, EntradaCanónica, RespuestaCanónica } from "../ai/types.js";
+import { getAIProvider } from "../ai/aiFactory.js";
 import { parsePayload, validatePayload } from "./payloadParser.js";
 import {
   findByCallbellUuid,
   createCaso,
   updateCasoHistorial,
   closeCaso,
+  reabrirCaso,
+  actualizarExtraccionIA,
   assignCaso,
 } from "../supabase/casoService.js";
 
@@ -70,6 +74,10 @@ export async function handleWebhook(
     case "message_created":
       return handleMessageCreated(supabase, parsed);
 
+    case "conversation_opened":
+      console.log("[WEBHOOK] conversation_opened recibido — sin acción en v1 (caso se activa al recibir mensaje)");
+      return { status: 200, message: "conversation_opened ignorado", casoId: null, created: false };
+
     case "conversation_closed":
       return handleConversationClosed(supabase, parsed);
 
@@ -88,8 +96,10 @@ export async function handleWebhook(
 
 /**
  * Procesa un evento message_created con status "received".
- * Si el caso ya existe y no está cerrado → actualiza historial.
- * Si no existe o está cerrado → crea caso nuevo.
+ * Tres ramas:
+ *   1. Caso existe y está activo → actualizar historial
+ *   2. Caso existe pero está cerrado → reabrir + re-analizar con IA
+ *   3. No existe → crear caso nuevo
  */
 async function handleMessageCreated(
   supabase: SupabaseClient,
@@ -121,7 +131,7 @@ async function handleMessageCreated(
   const existingCaso = await findByCallbellUuid(supabase, conversationUuid);
   console.log("[STEP 4] Resultado búsqueda — encontrado:", !!existingCaso, existingCaso ? "id:" + existingCaso.id + " estado:" + existingCaso.estado : "no encontrado");
 
-  // --- 2. Si existe y no está cerrado → actualizar historial ---
+  // --- RAMA 1: caso existe y está activo → agregar mensaje al historial ---
   if (existingCaso && existingCaso.estado !== "cerrado") {
     console.log("[STEP 7] Actualizando historial para caso existente:", existingCaso.id);
 
@@ -146,13 +156,105 @@ async function handleMessageCreated(
     };
   }
 
-  // --- 3. Si no existe o está cerrado → crear nuevo ---
-  // TODO: [Fase 3] Aquí se invocará el análisis de IA (Claude Adapter)
-  // para determinar tipo_caso, extraer datos de la orden médica,
-  // calcular confianza y generar flags automáticos.
-  // Por ahora se crea con tipo_caso por defecto y placeholders.
-  console.log("[STEP 5] Creando nuevo caso para conversation:", conversationUuid);
-  const nuevoCaso = await createCaso(supabase, parsed, correlationId);
+  // --- RAMA 2: caso existe pero está cerrado → reabrir + re-analizar con IA ---
+  if (existingCaso && existingCaso.estado === "cerrado") {
+    console.log("[STEP 5] Caso cerrado detectado — reabriendo:", existingCaso.id);
+
+    const reabierto = await reabrirCaso(supabase, existingCaso.id);
+    if (!reabierto) {
+      console.error("[STEP 5.ERR] No se pudo reabrir el caso:", existingCaso.id);
+      return { status: 200, message: "Error al reabrir caso", casoId: existingCaso.id, created: false };
+    }
+
+    // Construir adjuntos para el adapter (content_type viene del parser)
+    const adjuntos: AdjuntoCanónico[] = (parsed.message?.attachments ?? [])
+      .map((att) => {
+        const ct = att.content_type ?? "application/octet-stream";
+        return {
+          url: att.url,
+          tipo: ct.startsWith("image/") ? "image" as const
+              : ct === "application/pdf" ? "pdf" as const
+              : "otro" as const,
+          mimeType: ct,
+          nombre: att.file_name ?? undefined,
+        };
+      });
+
+    const entrada: EntradaCanónica = {
+      casoId: existingCaso.id,
+      conversationUuid,
+      textoMensaje: message.text ?? "",
+      adjuntos,
+      contactoNombre: contact.name,
+      contactoTelefono: contact.phone,
+      timestamp: parsed.timestamp ?? new Date().toISOString(),
+    };
+
+    let analisisIA: RespuestaCanónica | null = null;
+    try {
+      const provider = getAIProvider();
+      analisisIA = await provider.analizarCaso(entrada);
+      console.log(`[STEP 5.IA] Análisis completado — tipo: ${analisisIA.tipo_caso}, confianza: ${analisisIA.confianza_global}`);
+    } catch (err) {
+      console.error("[STEP 5.IA] Error en análisis IA al reabrir — continuando:", err);
+    }
+
+    // Actualizar tipo_caso y prioridad en casos si el análisis lo cambió
+    if (analisisIA) {
+      await supabase
+        .from("casos")
+        .update({ tipo_caso: analisisIA.tipo_caso, prioridad: analisisIA.prioridad })
+        .eq("id", existingCaso.id);
+
+      await actualizarExtraccionIA(supabase, existingCaso.id, analisisIA, parsed);
+    }
+
+    console.log("[STEP 8] Fin exitoso — caso reabierto:", existingCaso.id);
+    return {
+      status: 200,
+      message: `Caso ${existingCaso.id} reabierto`,
+      casoId: existingCaso.id,
+      created: false,
+    };
+  }
+
+  // --- RAMA 3: no existe → crear nuevo caso con IA ---
+  console.log("[STEP 5] Analizando con IA:", conversationUuid);
+
+  const adjuntos: AdjuntoCanónico[] = (message.attachments ?? [])
+    .map((att) => {
+      const ct = att.content_type ?? "application/octet-stream";
+      return {
+        url: att.url,
+        tipo: ct.startsWith("image/") ? "image" as const
+            : ct === "application/pdf" ? "pdf" as const
+            : "otro" as const,
+        mimeType: ct,
+        nombre: att.file_name ?? undefined,
+      };
+    });
+
+  const entrada: EntradaCanónica = {
+    casoId: "PENDING",
+    conversationUuid,
+    textoMensaje: message.text ?? "",
+    adjuntos,
+    contactoNombre: contact.name,
+    contactoTelefono: contact.phone,
+    timestamp: parsed.timestamp ?? new Date().toISOString(),
+  };
+
+  let analisisIA: RespuestaCanónica | null = null;
+  try {
+    const provider = getAIProvider();
+    analisisIA = await provider.analizarCaso(entrada);
+    console.log(`[STEP 5.IA] Análisis completado — tipo: ${analisisIA.tipo_caso}, confianza: ${analisisIA.confianza_global}`);
+  } catch (err) {
+    console.error("[STEP 5.IA] Error en análisis IA — continuando con placeholders:", err);
+  }
+
+  console.log("[STEP 5] Creando caso en BD:", conversationUuid);
+  const nuevoCaso = await createCaso(supabase, parsed, correlationId, analisisIA ?? undefined);
 
   if (!nuevoCaso) {
     console.error("[STEP 6.ERR] createCaso devolvió null — no se insertó el caso");

@@ -6,6 +6,7 @@
 
 import type {
   CallbellPayload,
+  CallbellAttachmentPayload,
   ParsedPayload,
   ParsedMessage,
   ParsedContact,
@@ -51,6 +52,40 @@ function inferAttachmentType(url: string): "image" | "document" {
   if (lower.endsWith(".pdf")) return "document";
   // Por omisión se asume imagen (órdenes médicas escaneadas/fotografiadas)
   return "image";
+}
+
+/**
+ * Infiere el MIME type desde la extensión del archivo.
+ */
+function inferMimeType(url: string): string {
+  const lower = url.toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  return "application/octet-stream";
+}
+
+/**
+ * Parsea un attachment individual que puede ser string (solo URL) u objeto.
+ */
+function parseAttachment(raw: string | { url: string; content_type?: string; file_name?: string; size?: number }): ParsedAttachment {
+  if (typeof raw === "string") {
+    return {
+      url: raw,
+      type: inferAttachmentType(raw),
+      content_type: inferMimeType(raw),
+      file_name: null,
+    };
+  }
+
+  return {
+    url: raw.url,
+    type: inferAttachmentType(raw.url),
+    content_type: raw.content_type ?? inferMimeType(raw.url),
+    file_name: raw.file_name ?? null,
+  };
 }
 
 /**
@@ -102,13 +137,10 @@ export function parsePayload(raw: CallbellPayload): ParsedPayload {
 
   if (payload.uuid && payload.status) {
     const text = payload.text ?? "";
-    const rawAttachments: string[] = payload.attachments ?? [];
+    const rawAttachments: (string | CallbellAttachmentPayload)[] = payload.attachments ?? [];
 
-    // Convert string[] URLs to ParsedAttachment[]
-    const parsedAttachments: ParsedAttachment[] = rawAttachments.map((url) => ({
-      url,
-      type: inferAttachmentType(url),
-    }));
+    // Convert attachment URLs/objects to ParsedAttachment[]
+    const parsedAttachments: ParsedAttachment[] = rawAttachments.map(parseAttachment);
 
     parsedMessage = {
       callbell_uuid: payload.uuid,

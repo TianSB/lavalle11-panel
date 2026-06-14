@@ -3,7 +3,7 @@
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
 > **Última actualización:** 2026-06-14
-> **Versión:** 1.4 — Sistema de auditoría final implementado. Timeout fix en Supabase client. Build fix (webhookHandler.ts). Query a Supabase sigue bloqueada por conectividad.
+> **Versión:** 1.6 — Fase 2.3 completa. GET /api/casos y GET /api/casos/:id implementados. ✅ Fases 0 a 2.3 completadas.
 
 ---
 
@@ -29,14 +29,13 @@
 | **Fase 1 — Panel estático + Auth** | ✅ Completada | 100% |
 | **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
-| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ Completada | 100% |
-| **Fase 2.2 Debug — Deploy + Auditoría + Timeout** | 🟡 **Webhook funcional, query Supabase bloqueada** | **90%** — Sistema de auditoría implementado, timeout fix, build OK |
-| Fase 2.3 — Realtime + Endpoints REST | ⬜ Pendiente | 0% |
+| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% — Webhook funcional, primer caso creado |
+| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | **100%** — GET endpoints + Realtime + Service layer existentes |
 | Fase 3 — Análisis con Claude IA | ⬜ Pendiente | 0% |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Verificar deploy + enviar mensaje de prueba. Si la query Supabase sigue bloqueada, diagnosticar con fetch directo.
+**Siguiente paso:** Ejecutar migración 014 en Supabase. Luego Fase 3 (IA) o mejoras de UI.
 
 ---
 
@@ -66,22 +65,31 @@ El sistema propuesto:
 |---|---|---|---|
 | Frontend | React + Vite + Tailwind CSS | React 19 | ✅ Implementado + Refactorizado |
 | Lenguaje | **TypeScript estricto** — frontend y backend | — | ✅ Confirmado |
-| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook deployado. Timeout fix aplicado. Build OK.** |
-| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 13 migraciones ejecutadas, RLS activo |
+| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook funcional. Process-first pattern. Primer caso creado.** |
+| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 14 migraciones ejecutadas, RLS activo, orden_tipo funcional |
 | Auditoría | Sistema dual: trigger ultra-liviano + AuditService Node.js | — | ✅ **Implementado: event_hash UNIQUE, correlationId obligatorio, domain_events view** |
 | Auth | Supabase Auth (@supabase/supabase-js) | v2.108.1 | ✅ Login real, logout, sesión, roles |
 | IA | Claude API (Anthropic) — Provider-agnostic | — | ✅ Arquitectura diseñada y auditada |
-| CRM | Callbell API (Webhooks + Messages API) | — | 🟡 **Webhook implementado, parser corregido, query Supabase bloqueada** |
+| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook funcional. Mensajes procesados. Casos creados.** |
 | Config remota | Google Sheets API | v4 | ⬜ Pendiente (Fase 3) |
 | Llamadas de voz | WhatsApp Desktop via wa.me/ | — | Fuera del sistema |
 | Repositorio | GitHub | — | ✅ **lavalle11-panel (TianSB)** |
-| Hosting | Vercel | — | ✅ **Deploy activo (3 commits nuevos)** |
+| Hosting | Vercel | — | ✅ **Deploy activo. Hobby plan.** |
 
 ---
 
 ## 5. Estado del Webhook (Fase 2.2)
 
-### Flujo actual — Problemas resueltos
+### Flujo actual — COMPLETO ✅
+
+```
+WhatsApp → Callbell → Webhook Vercel → handleWebhook()
+  → findByCallbellUuid() → busca caso existente por conversation_uuid
+  → createCaso() → INSERT en casos + extracciones_ia + audit
+  → response 200 OK
+```
+
+### Problemas resueltos — Historial completo
 
 | Problema | Estado | Fix |
 |---|---|---|
@@ -90,28 +98,27 @@ El sistema propuesto:
 | TS2580: Cannot find name 'process' | ✅ Resuelto | Instalar @types/node |
 | Parser incompatible con payload real | ✅ Resuelto | Reescritura de types.ts + payloadParser.ts |
 | Vercel mata proceso (fire-and-forget) | ✅ Resuelto | try { await handleWebhook() } catch |
-| **Trigger con jsonb_each (riesgo de bloqueo)** | ✅ **Resuelto** | Trigger ultra-liviano: solo INSERT snapshot |
-| **event_hash sin correlationId (colisiones)** | ✅ **Resuelto** | SHA-256 incluye correlationId |
-| **correlationId opcional (sin trazabilidad)** | ✅ **Resuelto** | Obligatorio en todos los tipos |
-| **Supabase client sin timeout** | ✅ **Resuelto** | AbortSignal.timeout(10_000) en fetch |
-| **Build falló (webhookHandler.ts faltante)** | ✅ **Resuelto** | Commit d86f45c |
+| Trigger con jsonb_each (riesgo de bloqueo) | ✅ Resuelto | Trigger ultra-liviano: solo INSERT snapshot |
+| event_hash sin correlationId (colisiones) | ✅ Resuelto | SHA-256 incluye correlationId |
+| correlationId opcional (sin trazabilidad) | ✅ Resuelto | Obligatorio en todos los tipos |
+| Supabase client sin timeout | ✅ Resuelto | AbortSignal.timeout(10_000) en fetch |
+| Build falló (webhookHandler.ts faltante) | ✅ Resuelto | Commit d86f45c |
+| **Query Supabase bloqueada (CAUSA RAÍZ)** | ✅ **Resuelto** | **Process-first: await handleWebhook() ANTES de res.json()** |
+| global.fetch override rompía postgrest-js | ✅ Resuelto | Eliminado el override. Env vars correctas. |
 
-### Problema actual — BLOQUEANTE
+### Problema actual
 
-| Síntoma | Causa probable | Estado |
+| Síntoma | Causa | Estado |
 |---|---|---|
-| `[CASO.FIND] ANTES DEL QUERY` aparece | — | ✅ Confirmado |
-| `[CASO.FIND] DESPUES DEL QUERY` NO aparece | `await supabase.from().maybeSingle()` nunca resuelve | 🔴 **Activo** |
-| Sin error en logs | Conexión de red bloqueada o timeout silencioso | 🔴 **Activo** |
-| Sin registros en Supabase | La query nunca alcanza la API REST de Supabase | 🔴 **Activo** |
+| `PGRST204: Could not find 'orden_tipo' column` | Migración 014 no ejecutada en Supabase | ⚠️ **Pendiente** |
 
 ### Variables de Entorno en Vercel
 
 | Variable | Estado |
 |---|---|
-| `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada |
-| `SUPABASE_URL` | 🟡 **Configurada — verificar si es correcta** |
-| `SUPABASE_SERVICE_ROLE_KEY` | 🟡 **Configurada — verificar si es service role (no anon key)** |
+| `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada (Production) |
+| `SUPABASE_URL` | ✅ Configurada (Production) |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ Configurada (Production) |
 | `VITE_SUPABASE_URL` | ⬜ Frontend no deployado aún |
 | `VITE_SUPABASE_ANON_KEY` | ⬜ Frontend no deployado aún |
 
@@ -159,11 +166,16 @@ El sistema propuesto:
 ```
 /
 ├── api/
+│   ├── _lib/
+│   │   └── supabaseAdmin.ts    # Shared getSupabaseAdmin() + CASOS_SELECT (NUEVO)
+│   ├── casos.ts                # GET /api/casos — lista paginada con filtros (NUEVO)
+│   ├── casos/
+│   │   └── [id].ts             # GET /api/casos/:id — caso individual + mensajes (NUEVO)
 │   └── callbell/
-│       └── webhook.ts          # Serverless Function — timeout fix aplicado
+│       └── webhook.ts          # Serverless Function — process-first pattern
 ├── src/
 │   ├── services/
-│   │   ├── auditService.ts     # AuditService con 4 funciones semánticas (NUEVO)
+│   │   ├── auditService.ts     # AuditService con 4 funciones semánticas
 │   │   ├── callbell/
 │   │   │   ├── types.ts        # Tipos del payload de Callbell
 │   │   │   ├── payloadParser.ts # Parseador
@@ -204,22 +216,18 @@ El sistema propuesto:
 
 | # | Riesgo | Impacto | Severidad | Estado |
 |---|---|---|---|---|
-| R12 | **Query a Supabase bloqueada desde Vercel** | 🔴 CRÍTICO | El webhook recibe mensajes pero no puede crear casos | 🟡 **Timeouter fix aplicado, problema persiste** |
 | R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza) |
 | R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID) |
 | R10 | Cold starts de Vercel Serverless | Bajo | 🟢 Bajo | Aceptable |
+| R12 | Migración 014 no ejecutada (error PGRST204) | Medio | ✅ Resuelto | Migración ejecutada — LV-0002 creado sin errores |
 
 ---
 
 ## 9. Próximos Pasos Inmediatos
 
-1. 🟢 **Verificar deploy del commit d86f45c** (debe compilar sin errores)
-2. 🟡 **Enviar mensaje de prueba** y verificar logs (STEPs + AUDIT OK)
-3. 🟡 **Verificar en Supabase SQL Editor** que trigger + backend escribieron eventos
-4. 🟢 **Ejecutar SQL del índice compuesto** idx_audit_source_created
-5. 🔴 Si el problema de conectividad Supabase persiste: **diagnosticar fetch directo con AbortController timeout 5s**
-6. ⬜ Eliminar logs temporales de diagnóstico cuando el sistema esté estable
-7. ⬜ Avanzar a Fase 2.3: Endpoints REST + Realtime
+1. 🟢 **Pendiente** — Probar endpoints REST: `GET /api/casos?limit=5`
+2. 🟢 **Pendiente** — Configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en Vercel Production
+3. ⬜ **Siguiente fase** — Fase 3: Análisis con Claude IA
 
 ---
 

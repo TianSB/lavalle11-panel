@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload, ParsedMessage, ParsedContact } from "../callbell/types.js";
+import type { RespuestaCanónica } from "../ai/types.js";
 import { auditCasoCreado } from "../auditService.js";
 
 // -----------------------------------------------------------
@@ -35,7 +36,7 @@ export interface CreateCasoInput {
 export interface CreateExtraccionInput {
   caso_id: string;
   paciente_nombre: string;
-  flags: string[];
+  flags: string[] | null;
   orden_url: string | null;
   orden_tipo: string | null;
   resumen: string;
@@ -104,6 +105,7 @@ export async function createCaso(
   supabase: SupabaseClient,
   parsed: ParsedPayload,
   correlationId: string,
+  analisis?: RespuestaCanónica,
 ): Promise<CasoRow | null> {
   console.log("[CASO] Iniciando createCaso");
 
@@ -116,10 +118,9 @@ export async function createCaso(
     callbell_conversation_uuid: conversation.uuid,
     contact_phone: contact.phone,
     contact_name: contact.name,
-    // TODO: [Fase 3] Reemplazar con tipo_caso inferido por IA
-    tipo_caso: "A",
+    tipo_caso: analisis?.tipo_caso ?? "A",
     estado: "pendiente",
-    prioridad: "normal",
+    prioridad: analisis?.prioridad ?? "normal",
   };
 
   console.log("[CASO] Ejecutando INSERT casos con datos:", JSON.stringify(casoInput));
@@ -137,22 +138,19 @@ export async function createCaso(
 
   const casoRow = caso as CasoRow;
 
-  // --- 2. Insertar extraccion_ia con placeholders ---
-  const flags: string[] = [];
-  if (parsed.message?.has_misrx_link) {
-    flags.push("orden_digital_misrx");
-  }
+  // --- 2. Insertar extraccion_ia con datos reales o placeholders ---
+  const flags = buildFlags(analisis, parsed);
 
   const extraccionInput: CreateExtraccionInput = {
     caso_id: casoRow.id,
-    paciente_nombre: contact.name,
+    paciente_nombre: analisis?.paciente_nombre ?? contact.name,
     flags,
-    orden_url: parsed.message?.has_misrx_link
-      ? extractMisRxUrl(parsed.message.text)
-      : null,
-    orden_tipo: parsed.message?.orden_tipo ?? null,
-    // TODO: [Fase 3] Reemplazar con resumen generado por IA
-    resumen: `Mensaje recibido de ${contact.name}. Pendiente de análisis por IA.`,
+    orden_url: analisis?.orden_url
+      ?? (parsed.message?.has_misrx_link ? extractMisRxUrl(parsed.message.text) : null),
+    orden_tipo: analisis?.orden_tipo
+      ?? (parsed.message?.has_misrx_link ? "misrx_link" : null)
+      ?? (parsed.message?.orden_tipo ?? null),
+    resumen: analisis?.resumen ?? `Mensaje recibido de ${contact.name}. Pendiente de análisis por IA.`,
   };
 
   console.log("[CASO] Ejecutando INSERT extracciones_ia para caso:", casoRow.id);
@@ -161,14 +159,27 @@ export async function createCaso(
     .insert({
       caso_id: extraccionInput.caso_id,
       paciente_nombre: extraccionInput.paciente_nombre,
-      practica: "Pendiente de análisis",
-      tipo_practica: "otro",
-      confianza_global: 0.0,
+      paciente_dni: analisis?.paciente_dni ?? null,
+      obra_social: analisis?.obra_social ?? null,
+      nro_afiliado: analisis?.nro_afiliado ?? null,
+      nro_carnet: analisis?.nro_carnet ?? null,
+      practica: analisis?.practica ?? "Pendiente de análisis",
+      tipo_practica: analisis?.tipo_practica ?? "otro",
+      medico_derivante: analisis?.medico_derivante ?? null,
+      matricula: analisis?.matricula ?? null,
+      diagnostico: analisis?.diagnostico ?? null,
+      motivo_solicitud: analisis?.motivo_solicitud ?? null,
+      confianza_global: analisis?.confianza_global ?? 0.0,
+      confianza_campos: analisis?.confianza_campos ?? null,
+      campos_baja_confianza: analisis?.campos_baja_confianza ?? null,
+      flags: extraccionInput.flags,
       resumen: extraccionInput.resumen,
-      modelo_ia: "pendiente",
-      flags: extraccionInput.flags.length > 0 ? extraccionInput.flags : null,
-      orden_url: extraccionInput.orden_url,
+      modelo_ia: analisis?.modelo_ia ?? "pendiente",
+      tiempo_procesamiento_ms: analisis?.tiempo_procesamiento_ms ?? null,
+      prompt_usado: analisis?.prompt_usado ?? null,
+      respuesta_raw: analisis?.respuesta_raw ?? null,
       orden_tipo: extraccionInput.orden_tipo,
+      orden_url: extraccionInput.orden_url,
     });
 
   if (extraccionError) {
@@ -191,6 +202,41 @@ export async function createCaso(
 
   console.log("[CASO] createCaso completado — caso:", casoRow.id);
   return casoRow;
+}
+
+/**
+ * Construye flags combinando las detectadas por IA con las reglas del sistema.
+ * Flags 🤖 (Claude detecta): ayuno, aines, orden_incompleta, orden_ilegible
+ * Flags ⚙️ (sistema aplica): baja_confianza, token_ioma, chiclana, error_ia, orden_digital_misrx
+ */
+function buildFlags(
+  analisis: RespuestaCanónica | undefined,
+  parsed: ParsedPayload,
+): string[] | null {
+  const flags = new Set<string>(analisis?.flags ?? []);
+
+  // Flags de sistema (reglas de negocio, no delegadas a la IA)
+  if (analisis && analisis.confianza_global < 0.7) {
+    flags.add("baja_confianza");
+  }
+  if (analisis?.obra_social?.toLowerCase().includes("ioma")) {
+    flags.add("token_ioma");
+  }
+  const practicasNuclear = ["pet_ct", "spect_ct", "centellograma", "perfusion_miocardica", "camara_gamma"];
+  if (analisis?.tipo_practica && practicasNuclear.includes(analisis.tipo_practica)) {
+    flags.add("chiclana");
+  }
+  if (parsed.message?.has_misrx_link) {
+    flags.add("orden_digital_misrx");
+  }
+  if (analisis && analisis.campos_baja_confianza.length > 0) {
+    flags.add("baja_confianza");
+  }
+  if (!analisis) {
+    flags.add("error_ia");
+  }
+
+  return flags.size > 0 ? Array.from(flags) : null;
 }
 
 /**
@@ -291,6 +337,82 @@ export async function closeCaso(
   }
 
   return true;
+}
+
+/**
+ * Reabre un caso cerrado cuando llega un nuevo mensaje en la misma conversación.
+ * Resetea estado, closing_reason y resolved_at.
+ * Devuelve true si se actualizó correctamente.
+ */
+export async function reabrirCaso(
+  supabase: SupabaseClient,
+  casoId: string,
+): Promise<boolean> {
+  console.log("[CASO] Reabriendo caso cerrado:", casoId);
+
+  const { error } = await supabase
+    .from("casos")
+    .update({
+      estado: "pendiente",
+      closing_reason: null,
+      resolved_at: null,
+    })
+    .eq("id", casoId);
+
+  if (error) {
+    console.error("[CASO] Error al reabrir caso:", error);
+    return false;
+  }
+
+  console.log("[CASO] Caso reabierto OK:", casoId);
+  return true;
+}
+
+/**
+ * Actualiza extracciones_ia con el nuevo análisis de IA al reabrir un caso.
+ * Usa UPDATE por caso_id (la relación es 1:1).
+ */
+export async function actualizarExtraccionIA(
+  supabase: SupabaseClient,
+  casoId: string,
+  analisis: RespuestaCanónica,
+  parsed: ParsedPayload,
+): Promise<void> {
+  console.log("[CASO] Actualizando extracciones_ia para caso reabierto:", casoId);
+
+  const { error } = await supabase
+    .from("extracciones_ia")
+    .update({
+      paciente_nombre: analisis.paciente_nombre,
+      paciente_dni: analisis.paciente_dni,
+      obra_social: analisis.obra_social,
+      nro_afiliado: analisis.nro_afiliado,
+      nro_carnet: analisis.nro_carnet,
+      practica: analisis.practica,
+      tipo_practica: analisis.tipo_practica,
+      medico_derivante: analisis.medico_derivante,
+      matricula: analisis.matricula,
+      diagnostico: analisis.diagnostico,
+      motivo_solicitud: analisis.motivo_solicitud,
+      confianza_global: analisis.confianza_global,
+      confianza_campos: analisis.confianza_campos,
+      campos_baja_confianza: analisis.campos_baja_confianza,
+      flags: buildFlags(analisis, parsed),
+      resumen: analisis.resumen,
+      modelo_ia: analisis.modelo_ia,
+      tiempo_procesamiento_ms: analisis.tiempo_procesamiento_ms,
+      prompt_usado: analisis.prompt_usado,
+      respuesta_raw: analisis.respuesta_raw,
+      orden_tipo: analisis.orden_tipo,
+      orden_url: analisis.orden_url,
+    })
+    .eq("caso_id", casoId);
+
+  if (error) {
+    console.error("[CASO] Error al actualizar extracciones_ia:", error);
+  } else {
+    console.log("[CASO] extracciones_ia actualizada OK para caso:", casoId);
+  }
 }
 
 /**

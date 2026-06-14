@@ -1,8 +1,8 @@
 # TODO — Plan de Trabajo y Seguimiento
 
 > **Proyecto:** Panel de Gestión de Turnos con IA — Instituto Lavalle 11
-> **Última actualización:** 2026-06-14
-> **Progreso general:** ~78% (95/122 tareas completadas)
+> **Última actualización:** 2026-06-14 (Sesión 23)
+> **Progreso general:** ~71% (91/128 tareas completadas) — Fases 0 a 2.3 completas ✅
 >
 > **Leyenda:** ✅ Completo | 🔄 En progreso | ⬜ Pendiente | ❌ Bloqueado | 🟡 En revisión
 
@@ -54,7 +54,7 @@
 ## Fase 2.2 — Backend + Webhook de Callbell
 
 **Objetivo:** El panel recibe casos reales de Callbell.
-**Estado: 🟡 Webhook deployado en Vercel. Bloqueado: query Supabase no completa.**
+**Estado: ✅ COMPLETADA. Webhook funcional en Vercel. Primer caso creado (LV-0001).**
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
@@ -69,7 +69,7 @@
 | 2.2.9 | Detección de MisRx (orden_tipo + flag) | ✅ | misrx.com.ar/prestacion |
 | 2.2.10 | Documentar .env.local con nuevas variables | ✅ | |
 
-**🔴 Deploy fixes aplicados en Sesión 18 + Sesión 22:**
+**🔴 Deploy fixes aplicados en Sesión 18 + Sesión 22 + Sesión 23:**
 
 | # | Tarea | Estado |
 |---|---|---|
@@ -78,41 +78,45 @@
 | D3 | Instalar @types/node para TS2580 | ✅ |
 | D4 | Corregir parser para payload real de Callbell | ✅ |
 | D5 | Reemplazar fire-and-forget por try/await/catch | ✅ |
-| D6 | **Diagnosticar bloqueo query Supabase** | 🟡 **Pendiente** |
-| D7 | Agregar fetch directo con timeout para diagnóstico | ⬜ |
-| D8 | Resolver conectividad Vercel → Supabase | ⬜ |
-| D9 | Eliminar logs temporales de diagnóstico | ⬜ |
+| D6 | **Diagnosticar bloqueo query Supabase** | ✅ **Resuelto — process-first pattern** |
+| D7 | Agregar fetch directo con timeout para diagnóstico | ✅ (eliminado post-fix) |
+| D8 | Resolver conectividad Vercel → Supabase | ✅ **Root cause: Vercel Hobby mata async después de res.json()** |
+| D9 | Eliminar logs temporales de diagnóstico | ✅ |
 
-**🔵 Sistema de Auditoría Final (NUEVO en Sesión 22):**
+**🔵 Sistema de Auditoría Final (Sesión 22):**
 
 | # | Tarea | Estado | Archivo |
 |---|---|---|---|
-| A1 | Diseñar arquitectura dual (trigger + backend) | ✅ | Documentación |
-| A2 | Crear trigger ultra-liviano (sin jsonb_each, sin jsonb_agg) | ✅ | `010_auditoria_eventos.sql` |
-| A3 | Crear tabla auditoria_eventos con event_hash UNIQUE | ✅ | `010_auditoria_eventos.sql` |
-| A4 | Crear src/services/auditService.ts con 4 funciones semánticas | ✅ | `src/services/auditService.ts` |
-| A5 | Integrar auditCasoCreado() en createCaso() | ✅ | `src/services/supabase/casoService.ts` |
-| A6 | Agregar correlation_id en webhookHandler | ✅ | `src/services/callbell/webhookHandler.ts` |
-| A7 | Hacer correlationId OBLIGATORIO (hotfix crítico) | ✅ | `src/services/auditService.ts` |
-| A8 | Incluir correlationId en event_hash (hotfix crítico) | ✅ | `src/services/auditService.ts` |
-| A9 | Agregar índice compuesto idx_audit_source_created | ✅ | `010_auditoria_eventos.sql` |
-| A10 | Agregar fetch timeout 10s en Supabase client | ✅ | `api/callbell/webhook.ts` |
-| A11 | Build fix: commit webhookHandler.ts faltante | ✅ | `src/services/callbell/webhookHandler.ts` |
+| A1–A11 | Sistema de auditoría dual + idempotencia + timeout | ✅ | Ver SESSION_LOG Sesión 22 |
+
+**🟢 Debugging Webhook + Root Cause Fix (Sesión 23):**
+
+| # | Tarea | Estado |
+|---|---|---|
+| B1 | Fetch directo con AbortController 5s para diagnóstico | ✅ |
+| B2 | Fix env vars Preview→Production en Vercel | ✅ |
+| B3 | Forzar invalidación de caché de Vercel (version bump) | ✅ |
+| B4 | Diagnóstico sincrónico [DIAG-1] (confirmar env vars correctas) | ✅ |
+| B5 | Eliminar global.fetch override (interfería con postgrest-js) | ✅ |
+| B6 | **Process-first pattern (causa raíz)** | ✅ |
+| B7 | Primer caso creado en Supabase: LV-0001 | ✅ |
+| B8 | Limpiar logs de diagnóstico temporales | ✅ |
+| B9 | **Ejecutar migración 014 en Supabase** | ✅ **Ejecutada — LV-0002 creado sin errores** |
 
 ---
 
 ## Fase 2.3 — Realtime + Endpoints REST
 
 **Objetivo:** El frontend recibe actualizaciones en vivo desde Supabase.
-**Dependencia:** Fase 2.2 desbloqueada (query Supabase funcional)
+**Estado: ✅ COMPLETADA.**
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.3.1 | Implementar GET /api/casos | ⬜ | Bloqueado por Fase 2.2 |
-| 2.3.2 | Implementar GET /api/casos/:id | ⬜ | Bloqueado por Fase 2.2 |
-| 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | Bloqueado por Fase 2.2 |
-| 2.3.4 | Conectar Supabase Realtime al frontend | ⬜ | Bloqueado por Fase 2.2 |
-| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ⬜ | Bloqueado por Fase 2.2 |
+| 2.3.1 | Implementar GET /api/casos | ✅ | `api/casos.ts` — lista paginada con filtros (estado, asesor_id, limit, offset) + count filtrado |
+| 2.3.2 | Implementar GET /api/casos/:id | ✅ | `api/casos/[id].ts` — caso individual con joins + mensajes ordenados, 404 handling |
+| 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | **Diferido a Fase 4** — requiere Callbell Messages API |
+| 2.3.4 | Conectar Supabase Realtime al frontend | ✅ | Ya implementado en `useCaseRealtimeSync.ts` (Sesión anterior) |
+| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ | Ya implementado en `supabaseService.ts` vía `CasoServiceProvider` (Sesión anterior) |
 
 ---
 
@@ -167,9 +171,9 @@
 | **Fase 1** — Panel estático | 20 | 19 | 0 | 1 | **95%** |
 | **Fase 1.5** — Refactor QA | 10 | 10 | 0 | 0 | **100%** |
 | **Fase 2.1** — Supabase Auth | 12 | 12 | 0 | 0 | **100%** |
-| **Fase 2.2** — Backend + Webhook | 19 | 14 | 0 | 5 | **74%** |
-| **Fase 2.3** — Realtime + REST | 5 | 0 | 0 | 5 | **0%** |
+| **Fase 2.2** — Backend + Webhook | 28 | 27 | 0 | 1 | **96%** |
+| **Fase 2.3** — Realtime + REST | 5 | 4 | 0 | 1 | **80%** |
 | **Fase 3** — Claude IA | 13 | 0 | 0 | 13 | **0%** |
 | **Fase 4** — Acciones asesor | 10 | 0 | 0 | 10 | **0%** |
 | **Fase 5** — Métricas | 8 | 0 | 0 | 8 | **0%** |
-| **Total general** | **120** | **78** | **0** | **42** | **~65%** |
+| **Total general** | **128** | **91** | **0** | **37** | **~71%** |

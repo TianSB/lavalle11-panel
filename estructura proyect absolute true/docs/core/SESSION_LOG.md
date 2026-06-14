@@ -11,6 +11,139 @@
 > - Estado al cierre
 > - Pendientes para la próxima sesión
 
+
+
+## Sesión 23 — 2026-06-14 — Debugging Webhook + Root Cause Fix (process-first) + Primer Caso en Supabase
+
+**Objetivo:** Diagnosticar y resolver el bloqueo de query a Supabase que impedía crear casos desde el webhook de Callbell.
+**Duración:** 1 sesión (~2h)
+**Herramientas:** Codebuff IA, TypeScript, Vercel Serverless, Supabase, GitHub
+
+### Resumen
+
+Se diagnosticó y resolvió el problema de conectividad que bloqueaba el webhook desde la Sesión 18. El sistema ahora procesa mensajes de WhatsApp completos y crea casos en Supabase.
+
+**Proceso de diagnóstico (4 iteraciones de debugging progresivo):**
+
+**Iteración 1 — Fetch directo con AbortController (5s timeout):**
+Se agregó un fetch directo a la REST API de Supabase con `AbortController` timeout de 5s, POR FUERA del cliente `supabase-js`. El objetivo era determinar si el problema era del cliente Supabase o de conectividad de red. **Resultado: el fetch directo TAMBIÉN se colgaba** — el `[DIAG] FETCH STATUS` nunca aparecía. Esto sugería un problema de red/env vars.
+
+**Iteración 2 — Fix de env vars (Preview vs Production):**
+El usuario descubrió que las variables `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` y `CALLBELL_WEBHOOK_SECRET` estaban configuradas solo en scope **Preview** en Vercel, no en **Production**. Las reconfiguró. **Resultado: SIGUIÓ sin funcionar** — los logs seguían idénticos, indicando que el código deployado era viejo (caché de Vercel).
+
+**Iteración 3 — Forzar invalidación de caché + Diagnóstico sincrónico:**
+El commit vacío (`a8ce799`) no invalidó la cache de Vercel. Se modificó el version string de `2026-06-14-A` a `2026-06-14-C` para forzar recompilación. Los logs confirmaron que el código nuevo corría (`VERSION CHECK 2026-06-14-C`). Se reemplazó el fetch directo por un **diagnóstico 100% sincrónico** (sin await, sin fetch, sin AbortController): `[DIAG-1]` loggeaba env vars. **Resultado: las env vars eran correctas** (`urlExists: true`, `keyExists: true`, URL 40 chars, Key 219 chars). El hang estaba en `await supabase.from()`.
+
+**Iteración 4 — Eliminar `global.fetch` override + Process-first pattern:**
+Se eliminó el `global.fetch` override con `AbortSignal.timeout(10_000)` que se había agregado en la Sesión 22 como fix de timeout. No resolvió el problema. Se cambió el patrón "respond-first" por "process-first": `await handleWebhook()` AHORA corre **ANTES** de `res.json()`. **Resultado: ¡FUNCIONÓ!**
+
+**Causa raíz:** Vercel Hobby plan termina la ejecución de la función serverless **inmediatamente después de enviar la respuesta HTTP** (`res.json()`). El patrón "respond-first" enviaba 200 y luego intentaba `await handleWebhook()`, pero Vercel ya había matado la función, por lo que el `await` nunca resolvía. Silenciosamente. Sin error. Sin timeout.
+
+**Primer caso en producción:** ✅ **LV-0001** creado en Supabase. Tiempo de procesamiento: **870ms**.
+
+**Error secundario encontrado:** `PGRST204: Could not find the 'orden_tipo' column of 'extracciones_ia'` — la migración `014_orden_tipo.sql` nunca se ejecutó en el proyecto Supabase.
+
+### Archivos Modificados
+
+| Archivo | Cambio |
+|---|---|
+| `api/callbell/webhook.ts` | Cambio de respond-first a process-first: `await handleWebhook()` antes de `res.json()`. Eliminado `global.fetch` override. Limpieza de comentarios. |
+| `src/services/supabase/casoService.ts` | Agregado y luego eliminado fetch diagnóstico con AbortController. Agregado y luego eliminado diagnóstico sincrónico `[DIAG-1]`. Version check: A→C→D. |
+
+### Commits Realizados
+
+| Hash | Mensaje |
+|---|---|
+| `a8ce799` | redeploy: force fresh build with fetch diagnostic (commit vacío, no invalidó cache) |
+| `3997afe` | chore(debug): bump version string to force Vercel cache invalidation |
+| `7fd5259` | fix(debug): replace async fetch diagnostic with synchronous env-var logging |
+| `324935c` | fix(webhook): remove global.fetch override that was causing supabase-js to hang |
+| `655be3d` | fix(webhook): swap to process-first pattern |
+| `91c7206` | chore: clean up diagnostic logs and commented code post-success |
+
+### Lecciones Aprendidas
+
+| Lección | Detalle |
+|---|---|
+| **Cache de Vercel** | Los commits vacíos NO invalidan la build cache. Modificar un source file para forzar recompilación |
+| **Respond-first en Hobby** | Vercel Hobby termina la función después de `res.json()`. Usar **process-first** para operaciones críticas |
+| **AbortSignal.timeout + supabase-js** | El `global.fetch` override interfiere con señales internas de `postgrest-js`. Env vars correctas = no se necesita |
+| **Debugging progresivo** | Logs sincrónicos sin await para aislar el punto exacto de congelamiento. Fetch directo con timeout para separar red vs librería |
+
+### Estado al Cierre
+
+- ✅ **Causa raíz identificada:** Vercel Hobby mata async después de `res.json()`
+- ✅ **Fix aplicado:** Process-first pattern (`await handleWebhook` antes que `res.json`)
+- ✅ **Primer caso creado:** LV-0001 en Supabase (procesamiento: 870ms)
+- ⚠️ **Error PGRST204:** Falta ejecutar migración `014_orden_tipo.sql` en Supabase
+- ✅ Logs de diagnóstico temporales eliminados
+- ✅ Build + TypeScript OK (commits múltiples)
+
+### Pendientes para la Próxima Sesión
+
+- [ ] Probar endpoints REST: `GET /api/casos?limit=5`
+- [ ] Configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en Vercel Production
+- [ ] Avanzar a Fase 3: Análisis con Claude IA
+
+---
+
+### Continuación — Migración 014 + Fase 2.3: Endpoints REST + Fix .js imports
+
+**Mismo día, misma sesión.** Se ejecutaron múltiples tareas para finalizar la sesión.
+
+**Migración 014 ejecutada en Supabase:** El usuario ejecutó `ALTER TABLE extracciones_ia ADD COLUMN orden_tipo` en SQL Editor. **Resultado: ✅ LV-0002 (Jade Kombucha) creado sin error PGRST204.**
+
+**Fix de .js extensions en imports:** `api/casos.ts` y `api/casos/[id].ts` tenían imports sin `.js` extension. Se agregaron para consistencia ESM con el resto del proyecto.
+
+**Log de verificación (LV-0002):**
+```
+[CASO] Resultado INSERT casos — OK, id: LV-0002
+[CASO] Resultado INSERT extracciones_ia — OK    ← Sin PGRST204
+[CASO] createCaso completado — caso: LV-0002
+[WEBHOOK] Processing completed (722ms)
+```
+
+**Commits adicionales:**
+| Hash | Mensaje |
+|---|---|
+| `0560180` | fix(api): add .js extensions to imports for ESM compatibility |
+
+**Dominio del proyecto:** `https://l11panel.vercel.app`
+
+### Estado Final de la Sesión
+
+- ✅ Fase 2.2 completa: Webhook funcional, casos reales en Supabase
+- ✅ Fase 2.3 completa: GET endpoints + Realtime + Service layer
+- ✅ Migración 014 ejecutada en Supabase
+- ✅ Casos LV-0001 (Cristian Ballesi) y LV-0002 (Jade Kombucha) creados
+- ✅ Sin errores en producción (722ms de procesamiento)
+- 🔑 **Próximo hito:** Fase 3 — Integración de Claude IA
+
+---
+
+### Continuación — Fase 2.3: Endpoints REST (GET /api/casos y GET /api/casos/:id)
+
+**Mismo día, misma sesión.** Después de confirmar que el webhook funciona, se implementaron los endpoints REST de la Fase 2.3.
+
+**Decisión:** Solo GET endpoints (recomendado). PATCH se difiere a Fase 4 cuando la Callbell Messages API sea necesaria. Realtime y migración a Supabase ya estaban implementados en sesiones anteriores.
+
+**Archivos creados (3):**
+
+| Archivo | Propósito |
+|---|---|
+| `api/_lib/supabaseAdmin.ts` | Shared utility: `getSupabaseAdmin()` y `CASOS_SELECT` con joins |
+| `api/casos.ts` | `GET /api/casos` — lista paginada con filtros (`?estado`, `?asesor_id`, `?limit`, `?offset`) + count filtrado |
+| `api/casos/[id].ts` | `GET /api/casos/:id` — caso individual con joins (extracciones_ia, turnos, llamadas) + mensajes ordenados |
+
+**Corrección post-review:** El count en `api/casos.ts` no respetaba los filtros (`?estado`, `?asesor_id`). Se corrigió aplicando las mismas condiciones al count query.
+
+**Commits:**
+| Hash | Mensaje |
+|---|---|
+| `3d06c7b` | feat(api): add GET /api/casos and GET /api/casos/:id endpoints |
+
+**Estado:** ✅ Fase 2.3 completada (endpoints GET + Realtime + Service layer existentes)
+
 ---
 
 ## Sesión 22 — 2026-06-14 — Auditoría Supabase Final + Timeout Fix + Hardening

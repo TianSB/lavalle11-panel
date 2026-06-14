@@ -35,6 +35,13 @@ export interface CallbellContactPayload {
   conversationHref?: string;
 }
 
+export interface CallbellAttachmentPayload {
+  url: string;
+  content_type?: string;
+  file_name?: string;
+  size?: number;
+}
+
 export interface CallbellPayload {
   event: CallbellEvent;
   payload: {
@@ -43,8 +50,8 @@ export interface CallbellPayload {
     status?: string;
     text?: string | null;
     contentType?: string;
-    /** Array of attachment URLs */
-    attachments?: string[];
+    /** Array of attachment URLs or attachment objects */
+    attachments?: (string | CallbellAttachmentPayload)[];
     createdAt?: string;
 
     // Contact
@@ -72,6 +79,8 @@ export type OrdenTipo = "imagen" | "pdf" | "misrx_link" | "no_aplica";
 export interface ParsedAttachment {
   url: string;
   type: "image" | "document";
+  content_type: string | null;
+  file_name: string | null;
 }
 
 export interface ParsedMessage {
