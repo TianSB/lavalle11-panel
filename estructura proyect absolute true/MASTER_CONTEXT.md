@@ -2,7 +2,7 @@
 
 > Copiar al inicio de cualquier conversación para recuperar contexto inmediato.
 > **Última actualización:** 2026-06-11
-> 🚀 **HITO: FASE 2.2 SS-01/02/03 implementados — constants.ts, SupabaseCasoService, setCasoService(). 81/115 tareas (70%)**
+> 🚀 **HITO: RBAC Decoupling completado. UI desacoplada de roles — solo permisos. 98/128 tareas (77%)**
 
 ---
 
@@ -12,7 +12,7 @@ Instituto Lavalle 11 es un centro de diagnóstico por imágenes en Bahía Blanca
 
 El proyecto construye un **panel web inteligente** que se interpone entre Callbell CRM y los asesores: cada mensaje entrante es analizado por **IA (provider-agnostic)** que extrae práctica, obra social, datos del paciente y flags de preparación; el caso aparece como card en el panel con todo pre-procesado; el asesor solo confirma fecha/hora y el sistema envía la respuesta a WhatsApp automáticamente.
 
-✅ **Fase 1, 1.5, 2.1 completadas.** Database Schema ✅, SQL Migrations ✅ (auditadas y corregidas), AI Architecture ✅ (auditada y aprobada). 🚀 **Infraestructura Base ✅ — 13 migraciones ejecutadas, 10 tablas, RLS activo.** ✅ **FASE 2.1 — Auth real validado (env vars, login, GitHub).** 🚀 **FASE 2.2 — SS-01/02/03 implementados (3/7 = 43%).** 🎯 **Próximo: SS-04 — Migrar DashboardPage a useCasos().**
+✅ **Fase 1, 1.5, 2.1 completadas.** Database Schema ✅, SQL Migrations ✅ (auditadas y corregidas), AI Architecture ✅ (auditada y aprobada). 🚀 **Infraestructura Base ✅. FASE 2.1 ✅. FASE 2.2 COMPLETA (7/7) ✅. Auth Hardening (S12) ✅. 🧹 Role Source Cleanup (S13) ✅. 🔐 RBAC Decoupling (S14) ✅.** UI desacoplada de roles — solo permisos. 🎯 **Próximo: Fase 2.3 — Callbell webhook + Realtime.**
 
 ---
 
@@ -57,8 +57,11 @@ El proyecto construye un **panel web inteligente** que se interpone entre Callbe
 | Fase 5 — Métricas | ⬜ | Post-Fase 4 |
 | 🚀 **Infraestructura Base** | ✅ **100%** | **10/10 migraciones ejecutadas en Supabase** |
 | 🔜 **FASE 2.1 — Auth (DB real)** | ✅ **100%** | **Auth validado. Env vars configuradas. Git/GitHub conectado** |
-| 🚀 **FASE 2.2 — SupabaseApiService** | 🚀 **43%** | **3/7 tareas: SS-01 constants.ts ✅, SS-02 SupabaseCasoService ✅, SS-03 setCasoService() ✅** |
-| **Progreso total** | **70%** | **81/115 tareas completadas** |
+| 🚀 **✅ FASE 2.2 — SupabaseApiService** | ✅ **100%** | **7/7 tareas: SS-01 a SS-07 completadas. Sistema migrado de mocks a datos reales** |
+| 🔐 **Auth Hardening (S12)** | ✅ **100%** | **4/4 tareas AH-01 a AH-04. Race condition eliminada. Trigger corregido** |
+| 🧹 **Role Source Cleanup (S13)** | ✅ **100%** | **3/3 tareas RC-01 a RC-03. Metadata limpia. DB es única fuente de verdad** |
+| 🔐 **RBAC Decoupling (S14)** | ✅ **100%** | **6/6 tareas RBAC-01 a RBAC-06. UI solo consulta permisos. module-level store** |
+| **Progreso total** | **77%** | **98/128 tareas completadas** |
 
 ---
 
@@ -71,11 +74,14 @@ El proyecto construye un **panel web inteligente** que se interpone entre Callbe
 5. **Config:** Google Sheets API con cache local TTL 5 min en Supabase
 6. **Despliegue:** Vercel + GitHub monorepo con preview deployments por PR
 7. **RIS:** Sin integración con IT SOS en v1 — el asesor registra manualmente
-8. **NO implementar Claude Adapter todavía** — priorizar Supabase, migraciones, Auth y Realtime antes que Callbell e IA
-9. **Orden de prioridad cumplido:** 🚀 Supabase (proyecto + migraciones) ✅ COMPLETADO → ahora Auth (conectar a DB real) → Realtime → Callbell → IA
+8. **NO implementar Claude Adapter todavía** — priorizar Supabase, migraciones, Auth, Realtime y Callbell antes que IA
+9. ✅ **Orden de prioridad cumplido:** 🚀 Supabase ✅ → Auth ✅ → FASE 2.2 ✅ → Auth Hardening ✅ → **🎯 Fase 2.3 (Realtime/Callbell)**
 10. ✅ **FASE 2.1 completada** — Auth real validado
-11. 🚀 **FASE 2.2 SS-01/02/03 completados** — 3/7 tareas
-12. 🎯 **Próximo hito inmediato:** **SS-04 — Migrar DashboardPage a useCasos()**
+11. 🚀 **✅ FASE 2.2 COMPLETA (7/7, 100%)** — Sistema migrado de mocks a datos reales
+12. 🔐 **✅ Auth Hardening (S12)** — Race condition eliminada. Trigger fix: rol nunca más se revierte
+13. 🧹 **✅ Role Source Cleanup (S13)** — `rol` eliminado de metadata. DB es única fuente de verdad
+14. 🔐 **✅ RBAC Decoupling (S14)** — `can(permission)` sin role param. Module-level store. `setRbacRole()`. `asesorRol` eliminado de props de Header, AppLayout, DashboardPage
+15. 🎯 **Próximo hito:** **Fase 2.3 — Callbell webhook + Realtime**
 
 ---
 
@@ -115,9 +121,12 @@ WhatsApp → Callbell → webhook → Vercel → Factory IA → Adapter → Supa
 | Migración mock → Supabase | Hook `useCasos()` + `CasoService` listo para swap | 🟡 Mitigado |
 | Costo de IA | `MAX_COST_PER_CALL_USD` configurable + fallback a modelos baratos | 🟡 Mitigado |
 | Webhooks duplicados | Idempotencia por `callbell_conversation_uuid` + `message_id` en migraciones SQL | ⬜ Pendiente |
-| Perfil no sincronizado en `public.usuarios` | Error message en login, trigger UPDATE en auth.users | 🟡 Mitigado |
+| Perfil no sincronizado en `public.usuarios` | Error message en login, trigger UPDATE en auth.users, MUESTRA error en UI | 🟡 Mitigado |
 | Vendor lock-in IA | **Arquitectura provider-agnostic diseñada y aprobada** | 🟡 Mitigado |
 | Trigger auditoría cambiaba campos falsos | ✅ **Resuelto** — Comparación corregida en `010_auditoria_eventos.sql` | ✅ **Resuelto** |
+| Trigger `sync_usuario_from_auth()` revertía rol en cada login | ✅ **Resuelto S12** — Eliminado `rol = EXCLUDED.rol`. `user_metadata` actualizado | ✅ **Resuelto** |
+| Race condition en `onAuthStateChange` | ✅ **Resuelto S12** — `handleAuthEvent()` con `getUser()` + `hydratingRef` | ✅ **Resuelto** |
+| Duplicación de rol: metadata vs DB | ✅ **Resuelto S13** — `rol` eliminado de `user_metadata`. DB es única fuente. Warning log | ✅ **Resuelto** |
 
 ## Hallazgo nuevo — Órdenes digitales MisRx (2026-06-10)
 
@@ -174,17 +183,14 @@ Formato del link: https://misrx.com.ar/prestacion?token=<uuid>
 
 ## Próximos Pasos (Priorizados)
 
-1. 🚀 **✅ Crear proyecto Supabase + migraciones 001–013** — COMPLETADO
-2. ✅ **FASE 2.1 — Supabase Auth:** .env.local, login validado, GitHub conectado
-3. ✅ Crear usuarios en Supabase Auth (Franco, Brenda, Catalina, Macarena)
-4. ✅ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-5. ✅ **FASE 2.2 — SS-01/SS-02/SS-03 implementados:** constants.ts, SupabaseCasoService, setCasoService()
-6. 🎯 **SS-04 — Migrar DashboardPage a useCasos()**
-7. 🎯 **SS-05 — Migrar MetricsBoard a useMetricas()**
-8. 🎯 **SS-06 — Verificar filtrado RLS**
-9. 🎯 **SS-07 — Compilación + verificación visual**
-10. ⬜ **Fase 2.3:** Endpoint webhook Callbell + Realtime
-11. ⬜ **Fase 3:** Implementar ClaudeAdapter (con O-01, O-02, O-03 mandatory)
+1. 🚀 **✅ Infraestructura Base** — Migraciones 001–013 ejecutadas
+2. ✅ **FASE 2.1** — .env.local, login validado, GitHub conectado
+3. 🚀 **✅ FASE 2.2 COMPLETA (7/7)** — Sistema migrado de mocks a datos reales
+4. 🔐 **✅ Auth Hardening + Trigger Fix (S12)** — Race condition eliminada. Rol nunca más se revierte
+5. 🧹 **✅ Role Source Cleanup (S13)** — Metadata limpia. DB es única fuente de verdad
+6. 🔐 **✅ RBAC Decoupling (S14)** — `can(permission)` sin role param. Module-level store
+7. 🎯 **⬜ Fase 2.3:** Endpoint webhook Callbell + Realtime
+7. ⬜ **Fase 3:** Implementar ClaudeAdapter (con O-01, O-02, O-03 mandatory)
 
 ---
 
@@ -192,11 +198,11 @@ Formato del link: https://misrx.com.ar/prestacion?token=<uuid>
 
 | Archivo | Contenido |
 |---|---|
-| `PROJECT_STATE.md` | Estado completo del proyecto (115 tareas, 81 completadas = 70%) + sección 12 con auditoría FASE 2.2 + progreso SS-01/02/03 |
+| `PROJECT_STATE.md` | Estado completo del proyecto (128 tareas, 98 completadas = 77%) + secciones 12-13 |
 | `ARCHITECTURE.md` | Arquitectura detallada + 12 diagramas Mermaid |
 | `DECISIONS.md` | 8 ADRs con justificación |
-| `TODO.md` | Plan de trabajo completo con 115 tareas en 10 secciones |
-| `SESSION_LOG.md` | 10 sesiones registradas |
+| `TODO.md` | Plan de trabajo completo con 128 tareas en 13 secciones |
+| `SESSION_LOG.md` | 14 sesiones registradas |
 | `docs/core/AI_PROVIDER_ARCHITECTURE.md` | Arquitectura provider-agnostic de IA (aprobada con auditoría) |
 | `database/migrations/` | 13 migraciones SQL auditadas y corregidas |
 | `database/DATABASE_SCHEMA.md` | 9 tablas, 22 ENUMs, esquema completo |

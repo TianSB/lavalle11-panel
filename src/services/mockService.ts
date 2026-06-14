@@ -5,6 +5,7 @@ import type {
   CasoPorTipo,
   VolumenDiario,
 } from "../types";
+import type { AssignCaseResult } from "./errors";
 import {
   MOCK_CASOS,
   MOCK_METRICAS,
@@ -24,7 +25,18 @@ export interface CasoService {
   getCasosPorTipo(): Promise<CasoPorTipo[]>;
   getVolumenDiario(): Promise<VolumenDiario[]>;
   getUsuarios(): Promise<Usuario[]>;
-  asignarCaso(casoId: string, asesorId: string): Promise<void>;
+  /**
+   * Asignar un caso al usuario autenticado.
+   *
+   * Atómico: RPC Postgres con UPDATE condicional + RETURNING.
+   * Retorna siempre un resultado estructurado (nunca throw para casos esperados):
+   *   { ok: true, caseId } — caso asignado exitosamente
+   *   { ok: false, code: "CASE_ALREADY_TAKEN" } — otro asesor ya lo tomó
+   *   { ok: false, code: "CASE_NOT_FOUND" } — caso no existe
+   *
+   * AppError solo para errores reales (network, auth).
+   */
+  asignarCaso(casoId: string): Promise<AssignCaseResult>;
   cerrarCaso(casoId: string, reason: string): Promise<void>;
   enviarMensaje(casoId: string, mensaje: string): Promise<void>;
 }
@@ -75,9 +87,17 @@ export const mockCasoService: CasoService = {
     return [USUARIO_ACTUAL, ADMIN_USUARIO];
   },
 
-  async asignarCaso(_casoId: string, _asesorId: string): Promise<void> {
+  async asignarCaso(casoId: string): Promise<AssignCaseResult> {
     await delay(200);
-    // Mock: no-op, visual feedback via Toast
+    // Buscar el caso en datos mock
+    const caso = MOCK_CASOS.find((c) => c.id === casoId);
+    if (!caso) {
+      return { ok: false, code: "CASE_NOT_FOUND" as const };
+    }
+    if (caso.asesor_id !== null || caso.estado !== "pendiente") {
+      return { ok: false, code: "CASE_ALREADY_TAKEN" as const };
+    }
+    return { ok: true, caseId: casoId };
   },
 
   async cerrarCaso(_casoId: string, _reason: string): Promise<void> {

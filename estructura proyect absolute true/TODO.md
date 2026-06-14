@@ -174,6 +174,79 @@
 
 ---
 
+## Role Source of Truth Cleanup — Sesión 13 ✅
+
+**Objetivo:** Eliminar toda dependencia de `auth.users.user_metadata` para roles. `public.usuarios.rol` como única fuente de verdad. Sin duplicación de estado.
+
+| # | Tarea | Estado | Sesión | Notas |
+|---|---|---|---|---|
+| RC-01 | Eliminar `rol` de `auth.users.raw_user_meta_data` (DB cleanup) | ✅ | 13 | `UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data - 'rol'`. Metadata solo contiene `nombre: "Admin"` |
+| RC-02 | Agregar role source validation warning en AuthContext | ✅ | 13 | `console.warn("ROLE SOURCE CONFLICT — usando public.usuarios como fuente única. Metadata ignorada.")` en `handleAuthEvent()` |
+| RC-03 | Sync migration `002_usuarios.sql` con trigger live en Supabase | ✅ | 13 | `ON CONFLICT DO UPDATE SET` sin `rol = EXCLUDED.rol`, con `activo = TRUE` y comentario documental |---
+## RBAC Decoupling — Sesión 14 ✅
+
+**Objetivo:** Desacoplar RBAC de roles: la UI solo consulta permisos, el sistema interno resuelve roles desde AuthContext. Eliminar `can(role, permission)` → `can(permission)`.
+
+| # | Tarea | Estado | Sesión | Notas |
+|---|---|---|---|---|
+| RBAC-01 | Refactor `can.ts`: module-level `currentRole`, `setRbacRole()`, `can(permission)` sin role param, `canWithRole(role, perm)` como pure function | ✅ | 14 | `currentRole` como módulo store. `setRbacRole()` exportado. `hasResourceAccess()` también desacoplado |
+| RBAC-02 | AuthContext: sincronizar `setRbacRole()` en todos los paths de auth | ✅ | 14 | `fetchUserProfile`, `handleAuthEvent` (!user), `SIGNED_OUT`, `logout()` — todos llaman `setRbacRole()` |
+| RBAC-03 | Simplificar `useCan.ts` — `can(permission)` sin role param, dependencias `[]` | ✅ | 14 | El hook ya no pasa role a `can()`. Dependencia vacía porque el store es module-level |
+| RBAC-04 | Header.tsx: `can("usuarios.manage")` sin role, eliminar `asesorRol` de `HeaderProps` | ✅ | 14 | `rolLabel` se resuelve internamente. `asesorRol` ya no es necesario como prop |
+| RBAC-05 | AppLayout.tsx: `can("metrics.read")` sin role, eliminar `asesorRol` de `AppLayoutProps` | ✅ | 14 | `esAdmin` usa `can("metrics.read")`. Dejó de pasar `asesorRol` a Header |
+| RBAC-06 | DashboardPage.tsx: dejar de pasar `asesorRol={user.rol}` a AppLayout | ✅ | 14 | Prop eliminada del JSX. AppLayout ya no necesita role externo para RBAC |
+
+---
+
+## CasoServiceContext — Singleton Eliminado — Sesión 15 ✅
+
+**Objetivo:** Eliminar el singleton global `getActiveService()` y reemplazarlo por React Context (CasoServiceProvider + useCasoService). Implementar state machine de 5 estados para UX de asignación de casos.
+
+| # | Tarea | Estado | Sesión | Notas |
+|---|---|---|---|---|
+| CC-01 | Crear `CasoServiceContext` + Provider + `useCasoService()` hook | ✅ | 15 | Multi-tenant ready: Provider acepta `service` opcional (default: supabaseCasoService). Sin mutable global |
+| CC-02 | Refactor `useCasos.ts` — eliminar singleton, usar `useCasoService()` | ✅ | 15 | Eliminados `activeService`, `getActiveService()`, `setCasoService()`. useCasos y useCasosPorAsesor usan hook con dependencia `[service]` |
+| CC-03 | Refactor `useAsignarCaso.ts` — usar `useCasoService()` | ✅ | 15 | Eliminado `getActiveService()`. Dependencia estable `[service]` |
+| CC-04 | Actualizar `App.tsx` — CasoServiceProvider en lugar de setCasoService() | ✅ | 15 | `<CasoServiceProvider>` envuelve AppContent. Sin side-effect al nivel del módulo |
+| CC-05 | Implementar state machine de asignación en CaseCard (5 estados + overlay) | ✅ | 15 | 5 estados: idle/claiming/claimed_by_me/claimed_by_other/failed. AssignOverlay con backdrop-blur. Auto-reset 2.5s con cleanup |
+| CC-06 | Refactor CaseGrid y DashboardPage — onAsignar retorna AssignCaseResult | ✅ | 15 | La card lee el resultado para actualizar su state machine. DashboardPage re-throws errores reales |
+
+## Realtime + Reconciliation + Version Control — Sesión 16 ✅
+
+**Objetivo:** Implementar 3 mejoras incrementales sobre la arquitectura de asignación: Realtime Layer (Supabase Realtime), Event-Driven Reconciliation con debounce y race condition protection, y Server Revision Control mediante `updated_at`.
+
+| # | Tarea | Estado | Sesión | Notas |
+|---|---|---|---|---|
+| RT-01 | Fix reconciliation bug — userId en reconcileCaseState | ✅ | 16 | `reconcileCaseState(serverCases, userId?, freshnessWindow?)`. Reducer compara serverCase.asesor_id === userId para distinguir claimed_by_me vs claimed_by_other |
+| RT-02 | Server Revision Control — serverUpdatedAt + version check | ✅ | 16 | `CaseUIEntry.serverUpdatedAt: string | null`. RECONCILE skip si `incoming.updated_at <= entry.serverUpdatedAt`. SET_CASE_UI_STATE resetea a null |
+| RT-03 | Debounce 300ms + mergeServerCases en reconcileCaseState | ✅ | 16 | `mergeServerCases(a, b)` dedup por id + updated_at. Acumula llamadas rápidas en ref, despacha una vez. Cleanup al desmontar |
+| RT-04 | Crear useCaseRealtimeSync hook con suscripción Realtime | ✅ | 16 | `supabase.channel("casos-realtime")` con postgres_changes (event: *, table: casos). isRelevantPayload filtra solo asesor_id/estado. Sin debounce propio (store lo maneja) |
+| RT-05 | Wirear useCaseRealtimeSync en DashboardPage | ✅ | 16 | Import y ejecución. Pasa userId a reconcileCaseState en useEffect y handler CASE_ALREADY_TAKEN |
+
+## Realtime Hardening — Sesión 17 ✅
+
+**Objetivo:** Hardenear el sistema Realtime ya activado con 3 capas de protección: event dedup, optimistic lock y reconnect/visibility resync. Pipeline de reconciliación estable con 6 pasos.
+
+| # | Tarea | Estado | Sesión | Notas | Esfuerzo |
+|---|---|---|---|---|---|
+| HH-01 | Optimistic Lock Protection — module-level Map TTL 2s | ✅ | 17 | `caseUIStore.ts`: `setOptimisticLock`/`clearOptimisticLock`/`isOptimisticLocked` + `useAsignarCaso.ts`: set/clear en RPC flow | 🟡 Medio |
+| HH-02 | Event Dedup — Set TTL 30s en useCaseRealtimeSync | ✅ | 17 | `processedEvents: Set<string>` + `buildEventId()` + `isEventDuplicate()` + cleanup automático | 🟡 Medio |
+| HH-03 | Reconnect + Visibility Resync — subscribe callback + visibilitychange | ✅ | 17 | `isFirstSubscription` flag, 5s visibility threshold, `clearProcessedEvents()` + `refetchCases()` | 🟡 Medio |
+| HH-04 | Stable Reconciliation Pipeline — 6 steps en RECONCILE | ✅ | 17 | Pipeline numerado: dedup → filter → lock check → version check → freshnessWindow → apply | 🟢 Mínimo |
+
+## Auth Hardening y Trigger Fix — Sesión 12 ✅
+
+**Objetivo:** Eliminar race conditions de hidratación de sesión en AuthContext + corregir trigger que revertía el rol en cada login.
+
+| # | Tarea | Estado | Sesión | Notas |
+|---|---|---|---|---|
+| AH-01 | Refactor `onAuthStateChange` — siempre llama `getUser()` antes de `fetchUserProfile()` | ✅ | 12 | `handleAuthEvent()` extraída como función compartida. Nunca confía en `session.user`. Logs: `AUTH EVENT:`, `AUTH USER (hydrated):` |
+| AH-02 | Agregar `hydratingRef` (useRef) para ignorar eventos durante hidratación inicial | ✅ | 12 | `INITIAL_SESSION` siempre skip. Eventos durante hydratingRef=true ignorados. initSession() setea hydratingRef=false al completar |
+| AH-03 | Corregir trigger `sync_usuario_from_auth()` — eliminar `rol = EXCLUDED.rol` del ON CONFLICT DO UPDATE | ✅ | 12 | Trigger ya no pisa rol existente. SQL ejecutado vía Management API con PAT. user_metadata actualizado con rol: administrador |
+| AH-04 | Actualizar `user_metadata` en `auth.users` para usuario admin | ✅ | 12 | `raw_user_meta_data` con `{"rol": "administrador", "nombre": "Admin"}`. Trigger INSERT path propaga rol correcto |
+
+---
+
 ## Fase 2 (restante) — Backend y Webhook de Callbell
 
 **Objetivo:** El panel recibe casos reales de Callbell en tiempo real.
@@ -184,7 +257,7 @@
 | 2.4 | Implementar validación de firma de webhook | ⬜ | — | HMAC-SHA256 |
 | 2.5 | Procesar evento `message_created` | ⬜ | — | Parseo de payload |
 | 2.6 | Crear registros en Supabase (tabla `casos`) | ⬜ | — | Datos crudos |
-| 2.7 | Conectar Supabase Realtime al panel | ⬜ | — | Cards aparecen en vivo |
+| 2.7 | Conectar Supabase Realtime al panel | ✅ | 16 | Implementado vía useCaseRealtimeSync hook + reconcileCaseState. RT-01 a RT-05 completados |
 | 2.8 | Implementar idempotencia de webhooks | ⬜ | — | Evitar duplicados por UUID |
 | 2.9 | Procesar eventos `conversation_opened` y `conversation_closed` | ⬜ | — | — |
 
@@ -263,8 +336,14 @@
 | **Diseño AI Architecture** | **14** | **14** | **0** | **0** | **100%** |
 | **🚀 Infraestructura Base** | **10** | **10** | **0** | **0** | **100%** |
 | **🚀 Fase 2.2 — SupabaseApiService** | **7** | **7** | **0** | **0** | **100%** |
-| Fase 2 (restante) — Backend + Webhook | 7 | 0 | 0 | 7 | 0% |
+| **🔐 Auth Hardening + Trigger Fix** | **4** | **4** | **0** | **0** | **100%** |
+| **🧹 Role Source of Truth Cleanup** | **3** | **3** | **0** | **0** | **100%** |
+| **🔐 RBAC Decoupling** | **6** | **6** | **0** | **0** | **100%** |
+| **🔧 CasoServiceContext — Singleton Eliminado** | **6** | **6** | **0** | **0** | **100%** |
+| **🔵 Realtime + Reconciliation + Version Control** | **5** | **5** | **0** | **0** | **100%** |
+| **🛡️ Realtime Hardening** | **4** | **4** | **0** | **0** | **100%** |
+| Fase 2 (restante) — Backend + Webhook | 7 | 1 | 0 | 6 | 14% |
 | Fase 3 — Claude IA | 10 | 0 | 0 | 10 | 0% |
 | Fase 4 — Acciones | 7 | 0 | 0 | 7 | 0% |
 | Fase 5 — Métricas | 6 | 0 | 0 | 6 | 0% |
-| **Total** | **115** | **85** | **0** | **30** | **74%** |
+| **Total** | **143** | **113** | **0** | **30** | **79%** |

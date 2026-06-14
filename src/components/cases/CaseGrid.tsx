@@ -1,10 +1,17 @@
 import type { Caso } from "../../types";
+import type { AssignCaseResult } from "../../services/errors";
 import { CaseCard } from "./CaseCard";
 
 interface CaseGridProps {
   casos: Caso[];
   isLoading?: boolean;
   onCaseClick: (caso: Caso) => void;
+  /**
+   * Callback de asignación. Debe retornar AssignCaseResult.
+   * La card lee el estado UI del store global, no local.
+   * Lanzar throw para errores reales (network, auth).
+   */
+  onAsignar?: (casoId: string) => Promise<AssignCaseResult>;
 }
 
 function SkeletonCard() {
@@ -39,7 +46,7 @@ function EmptyState() {
   );
 }
 
-export function CaseGrid({ casos, isLoading = false, onCaseClick }: CaseGridProps) {
+export function CaseGrid({ casos, isLoading = false, onCaseClick, onAsignar }: CaseGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -61,7 +68,7 @@ export function CaseGrid({ casos, isLoading = false, onCaseClick }: CaseGridProp
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {casos.map((caso) => (
-        <CaseCard key={caso.id} caso={caso} onClick={onCaseClick} />
+        <CaseCard key={caso.id} caso={caso} onClick={onCaseClick} onAsignar={onAsignar} />
       ))}
     </div>
   );

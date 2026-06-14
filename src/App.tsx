@@ -1,12 +1,11 @@
+import { useEffect } from "react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { CasoServiceProvider } from "./context/CasoServiceContext";
+import { CaseUIStoreProvider } from "./context/CaseUIStoreContext";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ToastContainer } from "./components/ui/Toast";
-import { setCasoService } from "./hooks/useCasos";
-import { supabaseCasoService } from "./services/supabaseService";
-
-// Switch from mock service to real Supabase service
-setCasoService(supabaseCasoService);
+import { supabase } from "./lib/supabase";
 
 function LoadingScreen() {
   return (
@@ -25,6 +24,24 @@ function LoadingScreen() {
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  // Debug: verify auth state in production
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.warn("AUTH DEBUG — getUser error:", error.message);
+      } else if (!data.user) {
+        console.warn("AUTH DEBUG — getUser returned null (no active session)");
+      } else {
+        console.log("AUTH DEBUG — User authenticated:", {
+          id: data.user.id,
+          email: data.user.email,
+          aud: data.user.aud,
+          role: data.user.role,
+        });
+      }
+    });
+  }, []);
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -39,7 +56,11 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <CasoServiceProvider>
+        <CaseUIStoreProvider>
+          <AppContent />
+        </CaseUIStoreProvider>
+      </CasoServiceProvider>
       <ToastContainer />
     </AuthProvider>
   );

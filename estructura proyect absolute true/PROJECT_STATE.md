@@ -2,7 +2,7 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Última actualización: 2026-06-11
-> 🚀 **HITO: FASE 2.2 COMPLETA (100%) — Sistema migrado de mocks a datos reales. RLS auditado (🟢 OK). Listo para deploy en Vercel. 85/115 tareas (74%).**
+> 🚀 **HITO: Realtime Hardening — Event Dedup + Optimistic Lock + Reconnect Resync. 113/143 tareas (79%).**
 
 ---
 
@@ -22,10 +22,10 @@
 **Hito completado:** 🚀 **FASE 2.2 — SupabaseApiService: COMPLETA (7/7, 100%)**
 _SS-01 a SS-07 implementados: constants.ts, SupabaseCasoService, setCasoService(), DashboardPage migrado, MetricsBoard migrado, RLS auditado, deploy readiness validado_
 
-**Siguiente fase:** 🎯 **Fase 2.3 — Endpoint webhook Callbell + Realtime**
-_Conectar webhook de Callbell, procesar mensajes entrantes, Realtime para cards en vivo_
+**Siguiente fase:** 🎯 **Fase 2.3 — Endpoint webhook Callbell + Deployment**
+_Endpoint webhook ya existe (api/callbell/webhook.ts). Pendiente: validación HMAC, procesamiento message_created, deploy en Vercel._
 
-> **Decisión de prioridad:** Supabase ✅ → Auth ✅ → 🚀 **FASE 2.2 (100% ✅)** → **🎯 FASE 2.3 ⬅️** → IA (Fase 3).
+> **Decisión de prioridad:** Supabase ✅ → Auth ✅ → 🚀 **FASE 2.2 (100% ✅)** → 🔧 **CasoServiceContext (100% ✅)** → 🔵 **Realtime Layer (100% ✅)** → 🛡️ **Realtime Hardening (100% ✅)** → **🎯 Fase 2.3 ⬅️** → IA (Fase 3).
 
 **Historial de fases:**
 - ✅ Fase 0 — Definición y estructura documental (91%)
@@ -37,7 +37,10 @@ _Conectar webhook de Callbell, procesar mensajes entrantes, Realtime para cards 
 - 🚀 **✅ Infraestructura Base — Migraciones ejecutadas, 10 tablas, RLS activo** (100%)
 - ✅ **Fase 2.1 — Supabase Auth (conectar a DB real)** — .env.local, login validado, Git/GitHub (100%)
 - 🚀 **✅ FASE 2.2 — SupabaseApiService** — 7/7 completadas (100%)
-- 🎯 **⬜ Fase 2.3 — Endpoint webhook Callbell + Realtime**
+- 🔧 **✅ Singleton Eliminado — CasoServiceContext** — CC-01 a CC-06 completadas (100%)
+- 🔵 **✅ Realtime Layer + Reconciliation + Version Control** — RT-01 a RT-05 completadas (100%)
+- 🛡️ **✅ Realtime Hardening — Event Dedup + Optimistic Lock + Reconnect Resync** — HH-01 a HH-04 completadas (100%)
+- ⬜ Fase 2.3 — Endpoint webhook Callbell
 - ⬜ Fase 3 — Análisis con Claude IA
 - ⬜ Fase 4 — Acciones del asesor
 - ⬜ Fase 5 — Seguimiento y métricas
@@ -73,6 +76,27 @@ El sistema propuesto interpone una capa de IA (Claude API) que analiza automáti
 - **SS-07:** Deployment readiness — TypeScript 0 errores ✅, Vite build OK (135KB gzip) ✅, vercel.json creado ✅, error handling fix en DashboardPage (banner rojo + separación loading/error/empty) ✅
 - Mocks mantenidos como respaldo. Bundle listo para Vercel. **Progreso FASE 2.2: 7/7 (100%)**
 
+**🔧 Singleton Eliminado — CasoServiceContext (6/6, 100%):**
+- **CC-01:** CasoServiceContext + Provider + useCasoService hook creado
+- **CC-02:** useCasos.ts — singleton eliminado, ahora usa useCasoService()
+- **CC-03:** useAsignarCaso.ts — ahora usa useCasoService()
+- **CC-04:** App.tsx — CasoServiceProvider reemplaza setCasoService()
+- **CC-05:** CaseCard — state machine de 5 estados (idle/claiming/claimed_by_me/claimed_by_other/failed) + overlay visual
+- **CC-06:** CaseGrid y DashboardPage — onAsignar retorna AssignCaseResult para state machine
+
+**🔵 Realtime Layer + Reconciliation + Version Control (5/5, 100%):**
+- **RT-01:** Fix reconciliation bug — userId agregado a reconcileCaseState (distinguir claimed_by_me vs claimed_by_other)
+- **RT-02:** Server Revision Control — serverUpdatedAt en CaseUIEntry + version check en RECONCILE
+- **RT-03:** Debounce 300ms + mergeServerCases en reconcileCaseState (evita flood de Realtime)
+- **RT-04:** useCaseRealtimeSync hook con suscripción Supabase Realtime + isRelevantPayload
+- **RT-05:** DashboardPage wireado con useCaseRealtimeSync
+
+**🛡️ Realtime Hardening — Event Dedup + Optimistic Lock + Reconnect Resync (4/4, 100%):**
+- **HH-01:** Optimistic Lock Protection — module-level `Map<caseId, timestamp>` TTL 2s en caseUIStore.ts
+- **HH-02:** Event Dedup — `Set<string>` TTL 30s en useCaseRealtimeSync.ts
+- **HH-03:** Reconnect + Visibility Resync — subscribe callback + visibilitychange handler con 5s threshold
+- **HH-04:** Stable Reconciliation Pipeline — 6 steps numerados en RECONCILE reducer (dedup → filter → lock → version → freshness → apply)
+
 ## 4. Documentación Disponible
 
 | Documento | Ubicación | Estado |
@@ -81,8 +105,8 @@ El sistema propuesto interpone una capa de IA (Claude API) que analiza automáti
 | PRD en Markdown | `core/PRD.md` | ✅ Generado |
 | Arquitectura | `ARCHITECTURE.md` | ✅ Generado (+ 12 diagramas Mermaid) |
 | Decisiones técnicas | `DECISIONS.md` | ✅ 8 ADRs registrados |
-| Plan de trabajo | `TODO.md` | ✅ 115 tareas, 85 completadas (74%) |
-| Registro de sesiones | `SESSION_LOG.md` | ✅ 11 sesiones registradas |
+| Plan de trabajo | `TODO.md` | ✅ 143 tareas, 113 completadas (79%) |
+| Registro de sesiones | `SESSION_LOG.md` | ✅ 17 sesiones registradas |
 | Requerimientos | `core/requirements.md` | ✅ Generado |
 | Casos de uso | `core/use-cases.md` | ✅ Generado |
 | Reglas de negocio | `core/business-rules.md` | ✅ Generado |
@@ -249,6 +273,9 @@ VITE_SUPABASE_ANON_KEY=     # ✅ Configurada en cliente (placeholder)
 | R08 | Vendor lock-in con Claude API | 🟡 Media | **Mitigado** — AI Provider Architecture permite swap sin cambiar código de negocio | 🟡 Mitigado |
 | R09 | Trigger auditoría detecta cambios falsos (CR-01) | 🟡 Media | ✅ **Resuelto** — Comparación corregida en `010_auditoria_eventos.sql` | ✅ Resuelto |
 | R10 | Perfil desactualizado si cambia email en Auth (R-01) | 🟢 Baja | ✅ **Resuelto** — Trigger UPDATE agregado en `002_usuarios.sql` | ✅ Resuelto |
+| R11 | Trigger `sync_usuario_from_auth()` revertía rol en cada login | 🔴 Alta | ✅ **Resuelto S12** — Eliminado `rol = EXCLUDED.rol` del `ON CONFLICT DO UPDATE`. `user_metadata` actualizado con `rol: administrador` | ✅ Resuelto |
+| R12 | Race condition en `onAuthStateChange`: `session.user` sin verificar server-side | 🟡 Media | ✅ **Resuelto S12** — `handleAuthEvent()` siempre llama `getUser()` antes de `fetchUserProfile()`. `hydratingRef` evita eventos duplicados | ✅ Resuelto |
+| R13 | Duplicación de fuente de verdad del rol: `user_metadata.rol` vs `public.usuarios.rol` | 🟡 Media | ✅ **Resuelto S13** — `rol` eliminado de `auth.users.user_metadata`. `public.usuarios.rol` es la ÚNICA fuente. Warning log si mismatch | ✅ Resuelto |
 
 ## 12. Auditoría Técnica — FASE 2.2: Reemplazo de Mocks
 
@@ -348,7 +375,15 @@ VITE_SUPABASE_ANON_KEY=     # ✅ Configurada en cliente (placeholder)
    - SS-05: MetricsBoard → useMetricas() desde useCasos()
    - SS-06: RLS auditado (🟢 OK)
    - SS-07: Build OK, vercel.json, error fix
-9. 🎯 **⬜ Fase 2.3 — Endpoint webhook Callbell + Realtime**
-10. ⬜ **Fase 3:** Análisis con Claude IA
-11. ⬜ **Fase 4:** Acciones del asesor + Callbell Messages API
-12. ⬜ **Fase 5:** Seguimiento y métricas
+9. ✅ **Auth Hardening (S12)** — Race condition de hidratación eliminada. `handleAuthEvent()` con `getUser()`, `hydratingRef` guard
+10. ✅ **Trigger fix (S12)** — `sync_usuario_from_auth()` ya no pisa rol. SQL vía Management API
+11. ✅ **Usuario admin verificado** — `lavalle11diagnostico@gmail.com` rol = `administrador` en DB
+12. 🧹 **✅ Role Source of Truth Cleanup (S13)** — `rol` eliminado de `auth.users.user_metadata`. `public.usuarios.rol` es la ÚNICA fuente de verdad. Migration file sincronizado. Warning en mismatch
+13. 🔐 **✅ RBAC Decoupling (S14)** — `can(permission)` sin role param. Module-level store. `asesorRol` eliminado de props de Header, AppLayout, DashboardPage
+14. 🔧 **✅ Singleton Eliminado — CasoServiceContext (S15)** — Singleton global eliminado. CasoServiceContext + Provider + useCasoService hook. 3 hooks refactorizados. State machine 5 estados en CaseCard + overlay visual
+15. 🔵 **✅ Realtime Layer + Reconciliation + Version Control (S16)** — useCaseRealtimeSync hook, serverUpdatedAt version control, 300ms debounce, reconciliation bug fix (userId)
+16. 🛡️ **✅ Realtime Hardening (S17)** — Event Dedup + Optimistic Lock + Reconnect/Visibility Resync + Stable Pipeline
+17. 🎯 **⬜ Fase 2.3 — Endpoint webhook Callbell**
+18. ⬜ **Fase 3:** Análisis con Claude IA
+19. ⬜ **Fase 4:** Acciones del asesor + Callbell Messages API
+20. ⬜ **Fase 5:** Seguimiento y métricas

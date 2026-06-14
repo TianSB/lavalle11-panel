@@ -1,10 +1,13 @@
+import { can } from "../../rbac";
+
 interface HeaderProps {
   asesorNombre: string;
-  asesorRol: string;
   onLogout: () => void;
 }
 
-export function Header({ asesorNombre, asesorRol, onLogout }: HeaderProps) {
+export function Header({ asesorNombre, onLogout }: HeaderProps) {
+  const rolLabel = can("usuarios.manage") ? "Administrador" : "Asesor";
+
   return (
     <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       <div className="flex items-center gap-3">
@@ -19,7 +22,7 @@ export function Header({ asesorNombre, asesorRol, onLogout }: HeaderProps) {
       <div className="flex items-center gap-4">
         <div className="text-right">
           <p className="text-sm font-medium text-gray-700">{asesorNombre}</p>
-          <p className="text-xs text-gray-500">{asesorRol === "administrador" ? "Administrador" : "Asesor"}</p>
+          <p className="text-xs text-gray-500">{rolLabel}</p>
         </div>
         <button
           onClick={onLogout}

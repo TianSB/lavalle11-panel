@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-11
-> **Versión:** 1.2 — Fase 2.2 completada (Backend + Webhook Callbell)
+> **Última actualización:** 2026-06-14
+> **Versión:** 1.4 — Sistema de auditoría final implementado. Timeout fix en Supabase client. Build fix (webhookHandler.ts). Query a Supabase sigue bloqueada por conectividad.
 
 ---
 
@@ -30,12 +30,13 @@
 | **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
 | **Fase 2.2 — Backend + Webhook de Callbell** | ✅ Completada | 100% |
+| **Fase 2.2 Debug — Deploy + Auditoría + Timeout** | 🟡 **Webhook funcional, query Supabase bloqueada** | **90%** — Sistema de auditoría implementado, timeout fix, build OK |
 | Fase 2.3 — Realtime + Endpoints REST | ⬜ Pendiente | 0% |
 | Fase 3 — Análisis con Claude IA | ⬜ Pendiente | 0% |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Agregar endpoints REST (GET /api/casos, GET /api/casos/:id) y conectar Realtime al frontend.
+**Siguiente paso:** Verificar deploy + enviar mensaje de prueba. Si la query Supabase sigue bloqueada, diagnosticar con fetch directo.
 
 ---
 
@@ -65,36 +66,110 @@ El sistema propuesto:
 |---|---|---|---|
 | Frontend | React + Vite + Tailwind CSS | React 19 | ✅ Implementado + Refactorizado |
 | Lenguaje | **TypeScript estricto** — frontend y backend | — | ✅ Confirmado |
-| Backend | Node.js (Vercel Serverless Functions) | 20 LTS | ✅ **Webhook implementado** (api/callbell/webhook.ts) |
-| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ **13 migraciones ejecutadas, RLS activo** |
+| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook deployado. Timeout fix aplicado. Build OK.** |
+| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 13 migraciones ejecutadas, RLS activo |
+| Auditoría | Sistema dual: trigger ultra-liviano + AuditService Node.js | — | ✅ **Implementado: event_hash UNIQUE, correlationId obligatorio, domain_events view** |
 | Auth | Supabase Auth (@supabase/supabase-js) | v2.108.1 | ✅ Login real, logout, sesión, roles |
 | IA | Claude API (Anthropic) — Provider-agnostic | — | ✅ Arquitectura diseñada y auditada |
-| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook implementado (Fase 2.2)** |
+| CRM | Callbell API (Webhooks + Messages API) | — | 🟡 **Webhook implementado, parser corregido, query Supabase bloqueada** |
 | Config remota | Google Sheets API | v4 | ⬜ Pendiente (Fase 3) |
 | Llamadas de voz | WhatsApp Desktop via wa.me/ | — | Fuera del sistema |
-| Repositorio | GitHub | — | ⬜ Pendiente |
-| Hosting | Vercel (Pro) | — | ⬜ Pendiente |
+| Repositorio | GitHub | — | ✅ **lavalle11-panel (TianSB)** |
+| Hosting | Vercel | — | ✅ **Deploy activo (3 commits nuevos)** |
 
 ---
 
-## 5. Estructura del Proyecto
+## 5. Estado del Webhook (Fase 2.2)
+
+### Flujo actual — Problemas resueltos
+
+| Problema | Estado | Fix |
+|---|---|---|
+| ERR_MODULE_NOT_FOUND | ✅ Resuelto | .js extensions en imports ESM |
+| Function Runtimes invalid version | ✅ Resuelto | Eliminar bloque functions de vercel.json |
+| TS2580: Cannot find name 'process' | ✅ Resuelto | Instalar @types/node |
+| Parser incompatible con payload real | ✅ Resuelto | Reescritura de types.ts + payloadParser.ts |
+| Vercel mata proceso (fire-and-forget) | ✅ Resuelto | try { await handleWebhook() } catch |
+| **Trigger con jsonb_each (riesgo de bloqueo)** | ✅ **Resuelto** | Trigger ultra-liviano: solo INSERT snapshot |
+| **event_hash sin correlationId (colisiones)** | ✅ **Resuelto** | SHA-256 incluye correlationId |
+| **correlationId opcional (sin trazabilidad)** | ✅ **Resuelto** | Obligatorio en todos los tipos |
+| **Supabase client sin timeout** | ✅ **Resuelto** | AbortSignal.timeout(10_000) en fetch |
+| **Build falló (webhookHandler.ts faltante)** | ✅ **Resuelto** | Commit d86f45c |
+
+### Problema actual — BLOQUEANTE
+
+| Síntoma | Causa probable | Estado |
+|---|---|---|
+| `[CASO.FIND] ANTES DEL QUERY` aparece | — | ✅ Confirmado |
+| `[CASO.FIND] DESPUES DEL QUERY` NO aparece | `await supabase.from().maybeSingle()` nunca resuelve | 🔴 **Activo** |
+| Sin error en logs | Conexión de red bloqueada o timeout silencioso | 🔴 **Activo** |
+| Sin registros en Supabase | La query nunca alcanza la API REST de Supabase | 🔴 **Activo** |
+
+### Variables de Entorno en Vercel
+
+| Variable | Estado |
+|---|---|
+| `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada |
+| `SUPABASE_URL` | 🟡 **Configurada — verificar si es correcta** |
+| `SUPABASE_SERVICE_ROLE_KEY` | 🟡 **Configurada — verificar si es service role (no anon key)** |
+| `VITE_SUPABASE_URL` | ⬜ Frontend no deployado aún |
+| `VITE_SUPABASE_ANON_KEY` | ⬜ Frontend no deployado aún |
+
+---
+
+## 6. Sistema de Auditoría Final
+
+### Arquitectura
+
+```
+                    auditoria_eventos (append-only log)
+                    ┌──────────────────────────────┐
+                    │ event_source = 'db_trigger'  │ ← Telemetría técnica
+                    │ event_type  = 'casos.snapshot'│
+                    │ correlation_id = NULL         │
+                    ├──────────────────────────────┤
+                    │ event_source = 'backend'      │ ← Eventos semánticos
+                    │ event_type  = 'caso.creado'   │
+                    │ correlation_id = UUID v4      │
+                    └──────────────────────────────┘
+                    ┌──────────┐   ┌──────────────┐
+                    │ VIEW     │   │ VIEW         │
+                    │domain_ev.│   │technical_ev. │
+                    │solo back │   │solo trigger  │
+                    └──────────┘   └──────────────┘
+```
+
+### Idempotencia
+
+| Source | Fórmula event_hash | Garantía |
+|---|---|---|
+| Trigger | `'trg:{caso_id}:{TG_OP}:{gen_random_uuid()}'` | Único por operación |
+| Backend | `sha256('backend:{casoId}:{eventType}:{detalle}:{correlationId}')` | Determinístico + UNIQUE en DB |
+
+### Protección anti-error humano
+
+1. **SQL:** CHECK constraint correlation_id NOT NULL para eventos backend
+2. **TypeScript:** correlationId: string (no opcional)
+3. **Views:** domain_events y technical_events evitan query directa
+
+---
+
+## 7. Estructura del Proyecto
 
 ```
 /
-├── PRD_Lavalle11_v1.docx       # PRD original (fuente de verdad)
-├── README.md                   # Portal de entrada
-├── .env.local                  # Documentación de variables de entorno
 ├── api/
 │   └── callbell/
-│       └── webhook.ts          # 🆕 Serverless Function — webhook de Callbell
+│       └── webhook.ts          # Serverless Function — timeout fix aplicado
 ├── src/
 │   ├── services/
+│   │   ├── auditService.ts     # AuditService con 4 funciones semánticas (NUEVO)
 │   │   ├── callbell/
-│   │   │   ├── types.ts        # 🆕 Tipos del payload de Callbell
-│   │   │   ├── payloadParser.ts # 🆕 Parseador del payload crudo
-│   │   │   └── webhookHandler.ts # 🆕 Lógica de negocio del webhook
+│   │   │   ├── types.ts        # Tipos del payload de Callbell
+│   │   │   ├── payloadParser.ts # Parseador
+│   │   │   └── webhookHandler.ts # Lógica de negocio + correlationId
 │   │   ├── supabase/
-│   │   │   └── casoService.ts  # 🆕 CRUD server-side de casos
+│   │   │   └── casoService.ts  # CRUD server-side + auditCasoCreado
 │   │   └── mockService.ts      # Mock service (frontend)
 │   ├── lib/
 │   │   └── supabase.ts         # Cliente Supabase (frontend)
@@ -112,8 +187,8 @@ El sistema propuesto:
 │   └── migrations/
 │       ├── 001_enums.sql       # 22 ENUMs
 │       ├── ...
-│       ├── 013_rls.sql         # Políticas RLS
-│       └── 014_orden_tipo.sql  # 🆕 Campo orden_tipo para MisRx
+│       ├── 010_auditoria_eventos.sql  # Sistema de auditoría FINAL (actualizado)
+│       └── 014_orden_tipo.sql  # Campo orden_tipo para MisRx
 └── docs/
     └── core/
         ├── PROJECT_STATE.md    # ← Este archivo
@@ -125,97 +200,32 @@ El sistema propuesto:
 
 ---
 
-## 6. Documentación Disponible
+## 8. Riesgos Activos
 
-| Archivo | Propósito | Estado |
-|---|---|---|
-| `PRD_Lavalle11_v1.docx` | PRD original | ✅ Completo |
-| `docs/core/PROJECT_STATE.md` | Estado actual del proyecto | ✅ Completo |
-| `docs/core/ARCHITECTURE.md` | Arquitectura detallada | ✅ Completo |
-| `docs/core/DECISIONS.md` | Decisiones técnicas (ADRs) | ✅ Completo |
-| `docs/core/TODO.md` | Plan de trabajo y seguimiento | ✅ Completo |
-| `docs/core/SESSION_LOG.md` | Registro de sesiones | ✅ Completo |
-| `docs/glossary.md` | Glosario de términos | ✅ Completo |
-| `docs/risks.md` | Matriz de riesgos | ✅ Completo |
-| `docs/workflow.md` | Flujo de trabajo con IA | ✅ Completo |
-| `core/PRD.md` | PRD en Markdown | ✅ Completo |
-| `core/requirements.md` | Requerimientos funcionales y no funcionales | ✅ Completo |
-| `core/use-cases.md` | Casos de uso detallados | ✅ Completo |
-| `core/business-rules.md` | Reglas de negocio | ✅ Completo |
-| `decisions/template.md` | Plantilla para nuevos ADRs | ✅ Completo |
-| `planning/roadmap.md` | Roadmap de desarrollo | ✅ Completo |
-| `planning/phase-1-panel-estatico.md` | Plan detallado de Fase 1 | ✅ Completo |
-| `backend/INDEX.md` | Documentación del backend | 🟡 Esqueleto |
-| `backend/API_SPEC.md` | Especificación de API REST | ✅ Completo |
-| `frontend/INDEX.md` | Documentación del frontend | 🟡 Esqueleto |
-| `frontend/UI_SPEC.md` | Especificación de UI | ✅ Completo |
-| `database/INDEX.md` | Documentación de base de datos | 🟡 Esqueleto |
-| `database/DATABASE_SCHEMA.md` | Schema completo de base de datos | ✅ Completo |
-| `prompts/INDEX.md` | Documentación de prompts | 🟡 Esqueleto |
+| # | Riesgo | Impacto | Severidad | Estado |
+|---|---|---|---|---|
+| R12 | **Query a Supabase bloqueada desde Vercel** | 🔴 CRÍTICO | El webhook recibe mensajes pero no puede crear casos | 🟡 **Timeouter fix aplicado, problema persiste** |
+| R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza) |
+| R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID) |
+| R10 | Cold starts de Vercel Serverless | Bajo | 🟢 Bajo | Aceptable |
 
 ---
 
-## 7. Variables de Entorno Requeridas
+## 9. Próximos Pasos Inmediatos
 
-```env
-# === Backend (Vercel Environment Variables) ===
-CALLBELL_WEBHOOK_SECRET=       # Token secreto para validar webhooks de Callbell (query param)
-CALLBELL_API_TOKEN=            # API key de Callbell Messages API
-SUPABASE_URL=                  # URL del proyecto Supabase (Project Settings > API)
-SUPABASE_SERVICE_ROLE_KEY=     # Service role key de Supabase (NO la anon key)
-ANTHROPIC_API_KEY=             # API key de Anthropic para Claude (Fase 3)
-GOOGLE_SHEETS_API_KEY=         # API key de Google Sheets (Fase 3)
-GOOGLE_SHEETS_ID=              # ID del spreadsheet de obras sociales y precios
-
-# === Frontend (Vite Environment Variables) ===
-VITE_SUPABASE_URL=             # URL del proyecto Supabase (pública)
-VITE_SUPABASE_ANON_KEY=        # Anon key de Supabase (pública)
-```
+1. 🟢 **Verificar deploy del commit d86f45c** (debe compilar sin errores)
+2. 🟡 **Enviar mensaje de prueba** y verificar logs (STEPs + AUDIT OK)
+3. 🟡 **Verificar en Supabase SQL Editor** que trigger + backend escribieron eventos
+4. 🟢 **Ejecutar SQL del índice compuesto** idx_audit_source_created
+5. 🔴 Si el problema de conectividad Supabase persiste: **diagnosticar fetch directo con AbortController timeout 5s**
+6. ⬜ Eliminar logs temporales de diagnóstico cuando el sistema esté estable
+7. ⬜ Avanzar a Fase 2.3: Endpoints REST + Realtime
 
 ---
 
-## 8. Equipo del Proyecto
-
-| Rol | Nombre | Acceso al sistema |
-|---|---|---|
-| **Referente operativo / Administrador** | Franco Berardi | Acceso completo + métricas + gestión de usuarios |
-| **Asesor** | Brenda Gandolfi | Panel completo: tomar, asignar y resolver casos |
-| **Asesor** | Catalina Herold | Panel completo |
-| **Asesor** | Macarena Abdala | Panel completo |
-| **Sede Chiclana** | (secretaría) | Notificaciones por WhatsApp (sin acceso al panel por ahora) |
-
----
-
-## 9. Riesgos Activos
-
-| # | Riesgo | Impacto | Probabilidad | Severidad | Mitigación |
-|---|---|---|---|---|---|
-| R01 | Precisión de Claude en órdenes manuscritas | Alto | Alta | 🔴 Crítico | Score de confianza por campo, campos <0.7 resaltados |
-| R02 | Latencia de Claude API | Medio | Media | 🟡 Alto | Modelo rápido, timeout con retry |
-| R03 | Costo impredecible de Claude API | Medio | Media | 🟡 Alto | Monitoreo de tokens desde día 1 |
-| R06 | Webhooks duplicados de Callbell | Medio | Media | 🟡 Alto | Idempotencia por callbell_conversation_uuid + message_id |
-| R08 | Adopción del equipo asesor | Alto | Alta | 🔴 Crítico | Fase 1 con datos mock para validar UX |
-| R10 | Cold starts de Vercel Serverless | Bajo | Baja | 🟢 Bajo | Warm-up con cron |
-| R11 | Precisión de lectura de MisRx (links) | Bajo | Baja | 🟢 Bajo | El asesor abre el link manualmente en v1 |
-
----
-
-## 10. Próximos Pasos Inmediatos
-
-1. ✅ Migración 014_orden_tipo.sql — MisRx digital orders
-2. ✅ Fase 2.2 — Backend + Webhook de Callbell (5 archivos creados)
-3. ⬜ Agregar endpoints REST: GET /api/casos, GET /api/casos/:id
-4. ⬜ Conectar Supabase Realtime al frontend
-5. ⬜ Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-6. ⬜ Configurar deploy automático en Vercel
-7. ⬜ Configurar webhook en dashboard de Callbell
-8. ⬜ Avanzar a Fase 3, 4, 5 secuencialmente
-
----
-
-## 11. Contacto y Referencias
+## 10. Contacto y Referencias
 
 - **PRD original:** `PRD_Lavalle11_v1.docx`
 - **Autor PRD:** RIA · r-ia.vercel.app
-- **Repositorio:** (por definir)
+- **Repositorio:** `github.com:TianSB/lavalle11-panel`
 - **Documentación completa:** Ver `docs/` y archivos maestros en raíz

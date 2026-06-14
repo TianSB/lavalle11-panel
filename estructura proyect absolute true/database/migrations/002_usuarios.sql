@@ -28,8 +28,10 @@ BEGIN
     ON CONFLICT (id) DO UPDATE SET
         nombre = EXCLUDED.nombre,
         email = EXCLUDED.email,
-        rol = EXCLUDED.rol,
+        activo = TRUE,
         updated_at = NOW();
+    -- NOTA: rol NO se actualiza aquí. public.usuarios.rol es la única fuente de verdad.
+    --       El rol se setea solo al INSERTAR (nuevo usuario). Nunca se sobrescribe en UPDATE.
     RETURN NEW;
 END;
 $$;

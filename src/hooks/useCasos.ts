@@ -1,20 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario, TipoCaso } from "../types";
-import { mockCasoService, type CasoService } from "../services/mockService";
 import { TIPOS_CASO } from "../constants";
-
-/**
- * Default service instance — swap this for a SupabaseApiService in Phase 2
- * without changing any consumer code.
- */
-let activeService: CasoService = mockCasoService;
-
-/**
- * Allows switching the active service at runtime (useful for testing or phased migration).
- */
-export function setCasoService(service: CasoService) {
-  activeService = service;
-}
+import { useCasoService } from "../context/CasoServiceContext";
 
 interface UseCasosReturn {
   casos: Caso[];
@@ -31,18 +18,20 @@ export function useCasos(): UseCasosReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const service = useCasoService();
+
   const fetch = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await activeService.getCasos();
+      const data = await service.getCasos();
       setCasos(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar casos");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [service]);
 
   useEffect(() => {
     fetch();
@@ -61,6 +50,7 @@ interface UseCasosFiltradosReturn {
  * Hook that filters casos by asesor (for "Mi Bandeja" view).
  */
 export function useCasosPorAsesor(asesorId: string): UseCasosFiltradosReturn {
+  const service = useCasoService();
   const [casos, setCasos] = useState<Caso[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,14 +59,14 @@ export function useCasosPorAsesor(asesorId: string): UseCasosFiltradosReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await activeService.getCasosByAsesor(asesorId);
+      const data = await service.getCasosByAsesor(asesorId);
       setCasos(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar casos");
     } finally {
       setIsLoading(false);
     }
-  }, [asesorId]);
+  }, [service, asesorId]);
 
   useEffect(() => {
     fetch();

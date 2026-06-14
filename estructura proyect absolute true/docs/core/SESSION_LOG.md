@@ -13,96 +13,210 @@
 
 ---
 
-## Sesión 1 — 2026-06-09
+## Sesión 22 — 2026-06-14 — Auditoría Supabase Final + Timeout Fix + Hardening
 
-**Objetivo:** Analizar el PRD completo del Instituto Lavalle 11 y crear la estructura documental del proyecto.
-**Duración:** 1 sesión (~30 min de interacción con IA)
-**Herramientas:** Codebuff IA, python-docx, bash
-**Contexto inicial:** Solo existía el archivo `PRD_Lavalle11_v1.docx` en el directorio.
+**Objetivo:** Diseñar e implementar sistema de auditoría final tipo Stripe/Linear para Supabase, hardening de idempotencia, y fix crítico de timeout en Supabase client.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, TypeScript, Supabase, PostgreSQL, Vercel Serverless
 
 ### Resumen
 
-Se extrajo el contenido completo del PRD desde el archivo `.docx` usando la librería `python-docx`. Con base en el texto extraído, se generó un informe arquitectónico completo de 10 secciones (resumen ejecutivo, funcionalidades, requerimientos funcionales y no funcionales, entidades, relaciones, casos de uso, riesgos, arquitectura, roadmap).
+Sesión enfocada en diseñar e implementar un sistema de auditoría production-grade para la tabla `casos`, con separación estricta entre eventos técnicos (trigger) y semánticos (backend), idempotencia global, y hardening de resiliencia.
 
-Posteriormente, se creó la estructura documental completa del proyecto:
+**Se corrigieron 4 problemas críticos de consistencia:**
 
-1. **Directorio raíz:** 5 archivos maestros de documentación
-2. **docs/:** Glosario, matriz de riesgos, flujo de trabajo con IA
-3. **core/:** PRD en Markdown, requerimientos, casos de uso, reglas de negocio
-4. **decisions/:** 6 ADRs registrados + template para futuros
-5. **planning/:** Roadmap de 5 fases + plan detallado de Fase 1
-6. **backend/, frontend/, database/, prompts/:** Esqueletos documentales
+**Problema 1 — Trigger PostgreSQL con jsonb_each + jsonb_agg (ALTO):**
+El trigger `registrar_evento_caso()` usaba `jsonb_each(to_jsonb(NEW))` + `jsonb_agg(key)` para hacer diff dinámico de campos en cada UPDATE. Esto podía causar degradación de performance en el pool de conexiones de PostgREST bajo concurrencia. Se reemplazó por un trigger ultra-liviano que solo hace INSERT de un snapshot de NEW, sin comparaciones OLD/NEW, sin jsonb_each, sin jsonb_agg. Costo estimado: ~0.05ms por operación (vs 2-5ms del original).
 
-Al finalizar, el usuario solicitó mover los 5 archivos maestros a `docs/core/` (en lugar de la raíz) y generar el contenido completo de cada uno, lo cual se realizó.
+**Problema 2 — event_hash sin correlationId (ALTO):**
+El `event_hash` del backend se calculaba como `sha256('backend:{casoId}:{accion}:{detalle}')` SIN incluir `correlationId`. Esto causaba colisiones cuando el mismo caso recibía dos eventos del mismo tipo (ej: dos `auditEstadoCambiado` de `pendiente -> en_curso`) en diferentes flujos de negocio. El segundo evento se perdía por unique violation. Se corrigió la fórmula a `sha256('backend:{casoId}:{accion}:{detalle}:{correlationId}')`.
 
-### Archivos Creados
+**Problema 3 — correlationId opcional en el backend (MEDIO):**
+`correlationId` era opcional (`correlationId?: string`) en todos los tipos del AuditService. Esto permitía que eventos backend se escribieran sin correlation_id, mezclándose con eventos de trigger (que siempre tienen correlation_id = NULL) y rompiendo la trazabilidad end-to-end. Se cambió a obligatorio en:
+  - `AuditPayload.correlationId`
+  - Los 4 tipos de parámetros de funciones audit: `auditCasoCreado`, `auditEstadoCambiado`, `auditAsignado`, `auditCerrado`
+  - `createCaso()` en `casoService.ts`
 
-#### Primera ronda (raíz del proyecto):
-- `README.md` — Portal de entrada al proyecto
-- `PROJECT_STATE.md` — (luego movido a docs/core/)
-- `ARCHITECTURE.md` — (luego movido a docs/core/)
-- `DECISIONS.md` — (luego movido a docs/core/)
-- `TODO.md` — (luego movido a docs/core/)
-- `SESSION_LOG.md` — (luego movido a docs/core/)
-- `docs/glossary.md` — Glosario de términos
-- `docs/risks.md` — Matriz de riesgos
-- `docs/workflow.md` — Flujo de trabajo con IA
-- `docs/INDEX.md` — Índice de documentación general
-- `core/PRD.md` — PRD en Markdown
-- `core/requirements.md` — Requerimientos
-- `core/use-cases.md` — Casos de uso
-- `core/business-rules.md` — Reglas de negocio
-- `decisions/template.md` — Plantilla ADR
-- `planning/roadmap.md` — Roadmap
-- `planning/phase-1-panel-estatico.md` — Plan Fase 1
-- `backend/INDEX.md` — Esqueleto backend
-- `frontend/INDEX.md` — Esqueleto frontend
-- `database/INDEX.md` — Esqueleto DB
-- `prompts/INDEX.md` — Esqueleto prompts
+**Problema 4 — Supabase client sin timeout en fetch (CRÍTICO):**
+El `createClient` de Supabase en `api/callbell/webhook.ts` usaba `global.fetch` sin timeout explícito. Esto causaba que requests a Supabase se colgaran para siempre si la red no respondía, sin error visible. Se agregó un wrapper custom de fetch con `AbortSignal.timeout(10_000)`.
 
-#### Segunda ronda (docs/core/):
-- `docs/core/PROJECT_STATE.md` — Estado del proyecto (completo)
-- `docs/core/ARCHITECTURE.md` — Arquitectura (completo)
-- `docs/core/DECISIONS.md` — 6 ADRs (completo)
-- `docs/core/TODO.md` — 83 tareas (completo)
-- `docs/core/SESSION_LOG.md` — Este archivo
+**Problema 5 — (Build fix) webhookHandler.ts no incluido en commit:**
+El commit `6a92976` incluyó `casoService.ts` con `correlationId` obligatorio pero NO incluyó `webhookHandler.ts` que tenía los cambios correspondientes (import crypto, correlationId, 3er argumento en createCaso). Vercel falló con `Expected 3 arguments, but got 2`. Se commitéo en `d86f45c`.
+
+### Diseño del Sistema de Auditoría Final
+
+**Arquitectura: dos streams, un solo log**
+
+| Capa | Source | event_type | correlation_id | Uso |
+|---|---|---|---|---|
+| Trigger PostgreSQL | `db_trigger` | `'casos.snapshot'` | NULL | Debugging, forense, detección de cambios no autorizados |
+| Backend AuditService | `backend` | `'caso.creado'`, `'caso.estado_cambiado'`, `'caso.asignado'`, `'caso.cerrado'` | UUID obligatorio | Reportes, reglas de negocio, UI |
+
+**Protección anti-error humano (3 capas):**
+1. SQL: CHECK constraint `chk_correlation_required` fuerza correlation_id NOT NULL en eventos backend
+2. TypeScript: `correlationId: string` (no opcional) en todos los tipos
+3. Views: `domain_events` (solo backend) y `technical_events` (solo trigger) evitan query directa a la tabla
+
+**Idempotencia final:**
+- Trigger: `'trg:' + caso_id + ':' + TG_OP + ':' + gen_random_uuid()'` (único, 1 vez por operación)
+- Backend: `sha256('backend:' + casoId + ':' + eventType + ':' + stableDetalle + ':' + correlationId)` (determinístico)
+- Garantía: UNIQUE constraint en event_hash a nivel DB
+
+### Archivos Creados/Modificados (6)
+
+#### Nuevos:
+- `src/services/auditService.ts` — AuditService con 4 funciones semánticas + idempotencia SHA-256
+
+#### Modificados:
+- `estructura proyect absolute true/database/migrations/010_auditoria_eventos.sql` — Trigger ultra-liviano, tabla con event_hash UNIQUE, event_source ENUM, índices compuestos
+- `src/services/supabase/casoService.ts` — correlationId obligatorio en createCaso + auditCasoCreado non-blocking
+- `src/services/callbell/webhookHandler.ts` — crypto import + correlationId + 3er arg en createCaso
+- `api/callbell/webhook.ts` — global.fetch wrapper con AbortSignal.timeout(10_000)
+- Todos los archivos de documentación: SESSION_LOG, PROJECT_STATE, TODO
+
+### Commits Realizados
+
+| Hash | Mensaje |
+|---|---|
+| `6a92976` | fix(audit): make correlationId mandatory, include in event_hash, add composite index |
+| `eddbe59` | fix(webhook): add 10s fetch timeout to Supabase client |
+| `d86f45c` | fix(webhook): commit missing webhookHandler.ts changes for mandatory correlationId |
+
+### Decisiones Tomadas
+
+| Decisión | Alternativa | Razón |
+|---|---|---|
+| **Trigger ultra-liviano** (solo snapshot, sin diff) | Trigger con lógica condicional + jsonb_each | Elimina riesgo de bloqueo en SELECTs. Cero lógica de negocio en DB |
+| **event_hash con correlationId** | event_hash sin correlationId (como estaba) | Previene colisiones cuando el mismo caso tiene eventos del mismo tipo en diferentes flujos |
+| **correlationId obligatorio** | Opcional (como estaba) | Garantiza trazabilidad end-to-end. Elimina ambigüedad entre eventos técnicos y semánticos |
+| **global.fetch con AbortSignal.timeout** | Sin timeout (como estaba) | Previene requests colgadas sin error. Fail-fast en 10s |
+| **domain_events view** | Query directa a auditoria_eventos | Protege contra errores humanos. La vista solo expone eventos backend |
+
+### Estado al Cierre
+
+- ✅ Sistema de auditoría final diseñado e implementado (trigger ultra-liviano + AuditService)
+- ✅ event_hash ahora incluye correlationId — no más colisiones en eventos del mismo tipo
+- ✅ correlationId obligatorio en todos los tipos — trazabilidad garantizada
+- ✅ fetch timeout 10s en Supabase client — fail-fast en vez de hang silencioso
+- ✅ Índice compuesto (event_source, created_at DESC) agregado
+- ✅ Views domain_events y technical_events creadas
+- ❌ Query a Supabase sigue bloqueada (problema de conectividad Vercel ↔ Supabase no resuelto)
+- 🔑 **Próximo paso:** Verificar deploy + enviar mensaje de prueba
+
+### Pendientes para la Próxima Sesión
+
+- [ ] Verificar que el deploy del commit d86f45c complete exitosamente en Vercel
+- [ ] Enviar mensaje de prueba y verificar logs (STEPs + AUDIT OK)
+- [ ] Verificar en Supabase SQL Editor que trigger + backend escribieron eventos
+- [ ] Ejecutar SQL del índice compuesto idx_audit_source_created
+- [ ] Si el problema de conectividad Supabase persiste: diagnosticar fetch directo con AbortController
+- [ ] Eliminar logs temporales de diagnóstico ([CASO.FIND] VERSION CHECK, STEP logs) cuando el sistema esté estable
+
+---
+
+## Sesión 18 — 2026-06-14 — Deploy Webhook + Diagnóstico de Bloqueo Supabase
+
+**Objetivo:** Llevar el webhook de Callbell a producción, resolver errores de deploy y diagnosticar bloqueo en consultas a Supabase.
+**Duración:** 1 sesión
+**Herramientas:** Codebuff IA, TypeScript, Vercel CLI, GitHub, Supabase, Callbell API
+
+### Resumen
+
+Sesión enfocada en llevar el webhook de Callbell a producción y resolver la cadena de errores que impedían el procesamiento de mensajes reales. Se corrigieron 5 problemas en secuencia, y se dejó identificado un sexto problema de bloqueo de red que impide la inserción de casos en Supabase.
+
+**Problema 1 — ERR_MODULE_NOT_FOUND:**
+El webhook fallaba con `Cannot find module '/var/task/src/services/callbell/webhookHandler'` en Vercel. Causa: imports ESM sin extensión `.js` en un proyecto con `"type": "module"`. Se agregaron extensiones `.js` a los 6 imports relativos en la cadena `api/callbell/webhook.ts` → `webhookHandler.ts` → `payloadParser.ts` → `types.ts` + `casoService.ts`.
+
+**Problema 2 — Function Runtimes must have a valid version:**
+Se había agregado `"runtime": "nodejs20.x"` en `vercel.json` como parte del fix anterior, pero Vercel rechaza ese formato. El campo `runtime` en `functions` es para Community Runtimes (npm packages), no para la versión de Node.js. Se eliminó el bloque `functions` completo. Node.js 20 se configuró desde Vercel Dashboard → Settings → General → Node.js Version. Luego se actualizó a Node.js 22 nativamente.
+
+**Problema 3 — TS2580: Cannot find name 'process':**
+`api/callbell/webhook.ts` usa `process.env` pero `@types/node` no estaba instalado. Solución: `npm install --save-dev @types/node`.
+
+**Problema 4 — Payload parser incompatible con estructura real de Callbell:**
+El parser esperaba `payload.message.*` y `payload.conversation.uuid`, pero Callbell envía los campos del mensaje planos en `payload.*` y el UUID de conversación vive dentro de `payload.contact.conversationHref` como URL. Se reescribió `types.ts` y `payloadParser.ts` para reflejar la estructura real, agregando `extractConversationUuid()` que extrae el UUID del último segmento de la URL.
+
+**Problema 5 — Vercel terminaba la ejecución antes de completar la query a Supabase:**
+El patrón "respond-first" usaba `handleWebhook(...).then().catch()` sin `await`, lo que causaba que Vercel matara el proceso inmediatamente después de enviar la respuesta HTTP. Se reemplazó por `try { await handleWebhook(...) } catch (err) { ... }`.
+
+**Problema 6 — (Diagnosticado, no resuelto) Query a Supabase nunca completa:**
+Después de corregir los problemas anteriores, los logs de Vercel muestran:
+
+```
+[CASO.FIND] VERSION CHECK 2026-06-14-A
+[CASO.FIND] Inicio búsqueda 22267cab03f048cda257b3ee1d79fc76
+[CASO.FIND] ANTES DEL QUERY
+```
+
+Pero `[CASO.FIND] DESPUES DEL QUERY` nunca aparece. El `await supabase.from("casos").select("*").eq().maybeSingle()` nunca resuelve. Sin error, sin timeout visible. Se confirma que no es un problema de lógica, tipos, imports ESM, ni parser — es un problema de conectividad de red entre la función serverless de Vercel y la API REST de Supabase. Posibles causas: SUPABASE_URL incorrecta, SUPABASE_SERVICE_ROLE_KEY inválida, o firewall bloqueando la conexión.
+
+### Archivos Modificados
+
+#### Correcciones de deploy:
+- `api/callbell/webhook.ts` — .js extensions en imports, await handleWebhook, try/catch
+- `src/services/callbell/webhookHandler.ts` — .js extensions en imports
+- `src/services/callbell/payloadParser.ts` — .js extensions en imports
+- `src/services/supabase/casoService.ts` — .js extensions en imports
+- `vercel.json` — Eliminado bloque functions inválido
+
+#### Fix de types:
+- `package.json` — Added @types/node (^25.9.3)
+
+#### Corrección del parser Callbell:
+- `src/services/callbell/types.ts` — Reescribir CallbellPayload para estructura real (campos planos, conversationHref)
+- `src/services/callbell/payloadParser.ts` — extractConversationUuid(), inferAttachmentType(), corrige paths de parsing
+
+#### Instrumentación de diagnóstico:
+- `src/services/supabase/casoService.ts` — findByCallbellUuid() con try/catch + logs [CASO.FIND] VERSION CHECK, ANTES/DESPUES DEL QUERY
+- `src/services/callbell/webhookHandler.ts` — STEP 1-8 logs
+- `src/services/supabase/casoService.ts` — [CASO] logs en createCaso
+- `api/callbell/webhook.ts` — RAW PAYLOAD log temporal
+
+#### Documentación:
+- `estructura proyect absolute true/docs/core/PROJECT_STATE.md` — Actualizado
+- `estructura proyect absolute true/docs/core/TODO.md` — Actualizado
+- `estructura proyect absolute true/docs/core/SESSION_LOG.md` — Esta entrada
 
 ### Decisiones Tomadas
 
 | Decisión | Detalle |
 |---|---|
-| Stack tecnológico | React + Vite + Tailwind / Node.js Serverless / Supabase / Claude API / Vercel |
-| Modelo de IA | Claude Sonnet 4 (claude-sonnet-4-20250514) |
-| DB + Realtime + Auth | Supabase unificado |
-| Configuración (obras sociales) | Google Sheets API + cache local TTL 5 min |
-| Despliegue | Vercel + GitHub monorepo |
-| Formato documentación | Markdown, ADRs, archivos maestros en docs/core/ |
+| **ESM imports** | Agregar `.js` extensions a imports relativos para compatibilidad con Node.js ESM + Vercel |
+| **Node.js runtime** | Configurar desde Vercel Dashboard, no desde vercel.json (`functions.runtime` es para Community Runtimes) |
+| **Parser Callbell** | Adaptar al payload real: campos planos `payload.uuid/status/text`, conversation UUID desde `contact.conversationHref` URL |
+| **Fire-and-forget** | Reemplazar por `try { await } catch` para evitar que Vercel termine el proceso antes de completar la query |
+| **Logs temporales** | Agregar STEP 1-8, [CASO.FIND], [CASO] para trazabilidad. Todos deben eliminarse cuando el problema esté resuelto |
 
-### Riesgos Identificados
+### Commits Realizados
 
-| # | Riesgo | Acción |
-|---|---|---|
-| R01 | Precisión de Claude en manuscritos médicos | Score de confianza por campo, resaltar <0.7 |
-| R08 | Adopción del equipo asesor | Fase 1 con datos mock para validar UX antes de invertir en integraciones |
-
-### Pendientes para la Próxima Sesión
-
-- [ ] Inicializar repositorio Git + GitHub (`lavalle11-panel`)
-- [ ] Inicializar proyecto React + Vite + TypeScript + Tailwind CSS
-- [ ] Configurar proyecto Supabase (auth + DB)
-- [ ] Configurar deploy automático en Vercel
-- [ ] Comenzar implementación de Fase 1 (panel estático con datos mock)
-- [ ] Completar archivos de detalle en backend/, frontend/, database/, prompts/
+| Hash | Mensaje |
+|---|---|
+| `62cadec` | fix: resolve vercel esm imports |
+| `c6f2149` | fix(vercel): remove invalid functions runtime block |
+| `d1182e0` | fix(types): add @types/node to resolve TS2580 (process.env) |
+| `6db009d` | fix(webhook): align payload parser with real Callbell webhook structure |
+| `dd11040` | fix(webhook): await handleWebhook to prevent Vercel early termination |
+| `e934808` | chore(debug): add VERSION CHECK + ANTES/DESPUES DEL QUERY logs |
 
 ### Estado al Cierre
 
-- ✅ Estructura documental 100% completa (Fase 0 terminada)
-- ✅ 23 archivos de documentación creados
-- ✅ 6 ADRs registrados y justificados
-- ✅ 83 tareas identificadas en 6 fases
-- ✅ Stack tecnológico y decisiones arquitectónicas documentadas
-- ⬜ Proyecto listo para comenzar desarrollo (Fase 1)
-- 🔑 **Próximo paso:** Inicializar repositorio y proyecto frontend
+- ✅ ERR_MODULE_NOT_FOUND resuelto
+- ✅ Function Runtimes invalid version resuelto
+- ✅ TS2580 (process.env) resuelto
+- ✅ Parser adaptado a payload real de Callbell
+- ✅ Fire-and-forget corregido (Vercel ya no mata el proceso)
+- ✅ Instrumentación de diagnóstico desplegada
+- 🟡 **BLOQUEANTE:** Query a Supabase nunca resuelve — `await supabase.from()` cuelga sin error
+- 🔑 **Próximo paso:** Determinar si es error de SUPABASE_URL/SERVICE_ROLE_KEY o firewall de red
+
+### Pendientes para la Próxima Sesión
+
+- [ ] Verificar SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en Vercel Dashboard
+- [ ] Agregar fetch directo con AbortController (timeout 5s) para diagnosticar conectividad a Supabase
+- [ ] Si el fetch responde: el problema está en el cliente @supabase/supabase-js
+- [ ] Si el fetch también cuelga: el problema es la URL/key o la red entre Vercel y Supabase
+- [ ] Una vez resuelto: eliminar todos los logs de diagnóstico temporales
+- [ ] Avanzar a Fase 2.3: Endpoints REST + Realtime
 
 ---
 

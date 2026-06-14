@@ -59,12 +59,13 @@ CREATE POLICY casos_insert_policy ON public.casos
         auth_rol() IN ('asesor', 'administrador')
     );
 
--- UPDATE: asesor modifica sus casos; admin modifica todos
+-- UPDATE: asesor modifica sus casos o toma sin asignar (solo si está pendiente); admin modifica todos
 CREATE POLICY casos_update_policy ON public.casos
     FOR UPDATE
     USING (
         auth_rol() = 'administrador'
         OR asesor_id = auth.uid()
+        OR (asesor_id IS NULL AND auth_rol() = 'asesor' AND estado = 'pendiente')
     );
 
 -- DELETE: solo admin (soft delete policy)

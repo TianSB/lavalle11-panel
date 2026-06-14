@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import type { Caso, EstadoCaso, Prioridad, TipoCaso } from "../types";
+import type { AssignCaseResult } from "../services/errors";
 import { useCasos } from "../hooks/useCasos";
 import { useAuth } from "../context/AuthContext";
 import { AppLayout } from "../components/layout/AppLayout";
@@ -7,6 +8,11 @@ import { FilterBar } from "../components/cases/FilterBar";
 import { CaseGrid } from "../components/cases/CaseGrid";
 import { CaseModal } from "../components/modal/CaseModal";
 import { MetricsBoard } from "../components/metrics/MetricsBoard";
+import { useAsignarCaso } from "../hooks/useAsignarCaso";
+import { useCaseRealtimeSync } from "../hooks/useCaseRealtimeSync";
+import { useCaseCrossTabSync } from "../hooks/useCaseCrossTabSync";
+import { useCaseUIStoreContext } from "../context/CaseUIStoreContext";
+import { showToast } from "../components/ui/Toast";
 
 type VistaActiva = "cola" | "bandeja" | "seguimientos" | "metricas";
 
@@ -19,7 +25,28 @@ export function DashboardPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoCaso | "todas">("todas");
   const [selectedCaso, setSelectedCaso] = useState<Caso | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { casos: allCasos, isLoading, error } = useCasos();
+  const { casos: allCasos, isLoading, error, refresh } = useCasos();
+  const { asignar: asignarCaso } = useAsignarCaso();
+  const { reconcileCaseState } = useCaseUIStoreContext();
+  const userId = user?.id;
+
+  // Suscripción Realtime a cambios en la tabla casos
+  // Pasa refresh() para resync automático en reconnect + visibility change
+  useCaseRealtimeSync(refresh);
+
+  // Sincronización multi-tab vía BroadcastChannel
+  // Evita inconsistencias UI-only cuando el mismo usuario tiene múltiples tabs
+  useCaseCrossTabSync(refresh);
+
+  // Reconciliar estado UI con servidor después de cada actualización de casos
+  const prevCasosRef = useRef<string>("");
+  const casosKey = allCasos.map((c) => `${c.id}:${c.asesor_id}:${c.estado}`).join(",");
+  useEffect(() => {
+    if (userId && casosKey !== prevCasosRef.current && allCasos.length > 0) {
+      prevCasosRef.current = casosKey;
+      reconcileCaseState(allCasos, userId, 3000);
+    }
+  }, [casosKey, allCasos, reconcileCaseState, userId]);
 
   if (!user) return null;
 
@@ -78,6 +105,27 @@ export function DashboardPage() {
     setIsModalOpen(true);
   };
 
+  const handleAsignarCaso = async (casoId: string): Promise<AssignCaseResult> => {
+    try {
+      // Pasar userId para que el store lo registre (claiming → claimed_by_me vs other)
+      const result = await asignarCaso(casoId, user.id);
+      if (result.ok) {
+        showToast("Caso asignado correctamente", "success");
+        refresh();
+      } else if (result.code === "CASE_ALREADY_TAKEN") {
+        showToast("El caso ya fue tomado por otro asesor", "error");
+        // Reconciliar: el store ya seteó claimed_by_other
+        if (userId) reconcileCaseState(allCasos, userId, 0);
+      } else if (result.code === "CASE_NOT_FOUND") {
+        showToast("El caso no fue encontrado", "error");
+      }
+      return result;
+    } catch (err) {
+      showToast("Error al asignar el caso. Intente nuevamente.", "error");
+      throw err;
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedCaso(null);
@@ -112,7 +160,6 @@ export function DashboardPage() {
   return (
     <AppLayout
       asesorNombre={user.nombre}
-      asesorRol={user.rol}
       vistaActiva={vistaActiva}
       onVistaChange={setVistaActiva}
       onFilterByTipo={handleFilterByTipo}
@@ -167,7 +214,7 @@ export function DashboardPage() {
               </div>
             </div>
           ) : !error || casosFiltrados.length > 0 ? (
-            <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} />
+            <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} onAsignar={handleAsignarCaso} />
           ) : null}
 
           <CaseModal

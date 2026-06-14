@@ -23,6 +23,8 @@ import type {
 } from "../types";
 import type { CasoService } from "./mockService";
 import { TIPOS_CASO } from "../constants";
+import type { AssignCaseResult } from "./errors";
+import { ErrorCodes, AppError } from "./errors";
 
 // -----------------------------------------------------------
 // Mapping helpers
@@ -335,22 +337,35 @@ export const supabaseCasoService: CasoService = {
   },
 
   // ---------------------------------------------------------
-  // asignarCaso
+  // asignarCaso — RPC única. Atómico, sin fallback.
+  // La RPC Postgres ejecuta un solo UPDATE condicional con
+  // RETURNING, SECURITY INVOKER (respeta RLS).
+  // Retorna AssignCaseResult — nunca throw para casos esperados.
   // ---------------------------------------------------------
-  async asignarCaso(casoId: string, asesorId: string): Promise<void> {
-    const { error } = await supabase
-      .from("casos")
-      .update({
-        asesor_id: asesorId,
-        estado: "en_proceso",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", casoId);
+  async asignarCaso(casoId: string): Promise<AssignCaseResult> {
+    const { data, error } = await supabase.rpc("assign_case", {
+      p_case_id: casoId,
+    });
 
+    // Error real de red/Supabase
     if (error) {
-      console.error("[SUPABASE_SERVICE] Error al asignar caso:", error.message);
-      throw new Error("No se pudo asignar el caso");
+      console.error("[SUPABASE_SERVICE] Error en RPC assign_case:", error.message);
+      throw new AppError(
+        ErrorCodes.ASSIGNMENT_FAILED,
+        "Error al asignar el caso: " + error.message,
+        { casoId },
+      );
     }
+
+    // La RPC retorna un JSONB: { ok: boolean, code: string, case_id: string | null }
+    const result = data as AssignCaseResult | null;
+    if (!result) {
+      throw new AppError(ErrorCodes.ASSIGNMENT_FAILED, "Respuesta vacía de la RPC", {
+        casoId,
+      });
+    }
+
+    return result;
   },
 
   // ---------------------------------------------------------

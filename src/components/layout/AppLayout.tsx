@@ -2,13 +2,13 @@ import { type ReactNode } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
+import { can } from "../../rbac";
 
 type VistaActiva = "cola" | "bandeja" | "seguimientos" | "metricas";
 
 interface AppLayoutProps {
   children: ReactNode;
   asesorNombre: string;
-  asesorRol: string;
   vistaActiva: VistaActiva;
   onVistaChange: (vista: VistaActiva) => void;
   onFilterByTipo?: (tipo: string) => void;
@@ -22,7 +22,6 @@ interface AppLayoutProps {
 export function AppLayout({
   children,
   asesorNombre,
-  asesorRol,
   vistaActiva,
   onVistaChange,
   onFilterByTipo,
@@ -36,7 +35,6 @@ export function AppLayout({
     <div className="flex h-screen flex-col bg-gray-50">
       <Header
         asesorNombre={asesorNombre}
-        asesorRol={asesorRol}
         onLogout={onLogout}
       />
       <div className="flex flex-1 overflow-hidden">
@@ -44,7 +42,7 @@ export function AppLayout({
           vistaActiva={vistaActiva}
           onVistaChange={onVistaChange}
           onFilterByTipo={onFilterByTipo}
-          esAdmin={asesorRol === "administrador"}
+          esAdmin={can("metrics.read")}
           totalCasos={totalCasos}
           misCasos={misCasos}
           seguimientosPendientes={seguimientosPendientes}
