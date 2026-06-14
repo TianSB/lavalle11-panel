@@ -37,10 +37,7 @@ function getSupabaseAdmin() {
       autoRefreshToken: false,
       persistSession: false,
     },
-    // NOTA: NO usar global.fetch override con AbortSignal.timeout
-    // porque interfiere con el manejo interno de señales de
-    // @supabase/supabase-js / postgrest-js y causa hangs.
-    // Las env vars ya están validadas antes de createClient().
+
   });
 }
 

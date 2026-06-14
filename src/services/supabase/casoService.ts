@@ -69,28 +69,16 @@ export async function findByCallbellUuid(
   callbellUuid: string,
 ): Promise<CasoRow | null> {
   try {
-    console.log("[CASO.FIND] VERSION CHECK 2026-06-14-C — con fetch diagnóstico");
+    console.log("[CASO.FIND] VERSION CHECK 2026-06-14-D");
     console.log("[CASO.FIND] Inicio búsqueda", callbellUuid);
 
     console.log("[CASO.FIND] ANTES DEL QUERY");
 
-    // --- DIAGNÓSTICO SINCRÓNICO (sin fetch, sin await) ---
-    console.log("[DIAG-1] Env vars:", {
-      urlExists: !!process.env.SUPABASE_URL,
-      keyExists: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      urlLen: process.env.SUPABASE_URL?.length ?? -1,
-      keyLen: process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? -1,
-      urlPrefix: process.env.SUPABASE_URL?.substring(0, 15) ?? 'NO_URL',
-    });
-    // --- FIN DIAGNÓSTICO SINCRÓNICO ---
-
-    console.log("[CASO.FIND] PRE-SUPA-FETCH");
     const result = await supabase
       .from("casos")
       .select("*")
       .eq("callbell_conversation_uuid", callbellUuid)
       .maybeSingle();
-    console.log("[CASO.FIND] POST-SUPA-FETCH");
 
     console.log("[CASO.FIND] DESPUES DEL QUERY");
     console.log("[CASO.FIND] Error:", result.error);
