@@ -73,6 +73,30 @@ export async function findByCallbellUuid(
     console.log("[CASO.FIND] Inicio búsqueda", callbellUuid);
 
     console.log("[CASO.FIND] ANTES DEL QUERY");
+
+    // --- DIAGNÓSTICO: fetch directo con timeout 5s ---
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const baseUrl = supabaseUrl!.replace(/\/+$/, '');
+      const diagUrl = `${baseUrl}/rest/v1/casos?callbell_conversation_uuid=eq.${callbellUuid}&select=id`;
+      const diagRes = await fetch(diagUrl, {
+        headers: {
+          "apikey": serviceKey!,
+          "Authorization": `Bearer ${serviceKey!}`
+        },
+        signal: controller.signal
+      });
+      console.log("[DIAG] FETCH STATUS:", diagRes.status, "OK:", diagRes.ok);
+    } catch (diagErr: any) {
+      console.log("[DIAG] FETCH ERROR — name:", diagErr.name, "message:", diagErr.message);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    // --- FIN DIAGNÓSTICO ---
+
     const result = await supabase
       .from("casos")
       .select("*")
