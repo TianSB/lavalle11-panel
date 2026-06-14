@@ -8,6 +8,7 @@
 // unitaria sin depender de Vercel.
 // ============================================================
 
+import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload } from "./types.js";
 import { parsePayload, validatePayload } from "./payloadParser.js";
@@ -94,6 +95,7 @@ async function handleMessageCreated(
   supabase: SupabaseClient,
   parsed: ParsedPayload,
 ): Promise<WebhookResult> {
+  const correlationId = crypto.randomUUID();
   const conversationUuid = parsed.conversation.uuid;
   const message = parsed.message;
   const contact = parsed.contact;
@@ -150,7 +152,7 @@ async function handleMessageCreated(
   // calcular confianza y generar flags automáticos.
   // Por ahora se crea con tipo_caso por defecto y placeholders.
   console.log("[STEP 5] Creando nuevo caso para conversation:", conversationUuid);
-  const nuevoCaso = await createCaso(supabase, parsed);
+  const nuevoCaso = await createCaso(supabase, parsed, correlationId);
 
   if (!nuevoCaso) {
     console.error("[STEP 6.ERR] createCaso devolvió null — no se insertó el caso");
