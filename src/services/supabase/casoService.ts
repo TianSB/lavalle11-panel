@@ -69,7 +69,7 @@ export async function findByCallbellUuid(
   callbellUuid: string,
 ): Promise<CasoRow | null> {
   try {
-    console.log("[CASO.FIND] VERSION CHECK 2026-06-14-A");
+    console.log("[CASO.FIND] VERSION CHECK 2026-06-14-C — con fetch diagnóstico");
     console.log("[CASO.FIND] Inicio búsqueda", callbellUuid);
 
     console.log("[CASO.FIND] ANTES DEL QUERY");
