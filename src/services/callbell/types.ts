@@ -23,43 +23,43 @@ export type CallbellContentType =
   | "video"
   | "sticker";
 
-export type CallbellConversationStatus = "open" | "closed" | "assigned";
-
 // -----------------------------------------------------------
-// Raw payload from Callbell (as documented in API spec)
+// Raw payload from Callbell (real structure from production)
 // -----------------------------------------------------------
-
-export interface CallbellAttachment {
-  url: string;
-  type: "image" | "document";
-}
-
-export interface CallbellMessagePayload {
-  uuid: string;
-  status: CallbellMessageStatus;
-  content: string | null;
-  contentType: CallbellContentType;
-  createdAt: string;
-  attachments: CallbellAttachment[];
-}
 
 export interface CallbellContactPayload {
   uuid: string;
-  name: string | null;
+  name?: string | null;
   phoneNumber: string;
-}
-
-export interface CallbellConversationPayload {
-  uuid: string;
-  status: CallbellConversationStatus;
+  /** URL containing the conversation UUID, e.g. https://dash.callbell.eu/chat/{uuid} */
+  conversationHref?: string;
 }
 
 export interface CallbellPayload {
   event: CallbellEvent;
   payload: {
-    message?: CallbellMessagePayload;
+    // Message fields (flat at payload level for message_created)
+    uuid?: string;
+    status?: string;
+    text?: string | null;
+    contentType?: string;
+    /** Array of attachment URLs */
+    attachments?: string[];
+    createdAt?: string;
+
+    // Contact
     contact?: CallbellContactPayload;
-    conversation?: CallbellConversationPayload;
+
+    // Conversation_closed fields
+    /** Conversation URL for conversation_closed events */
+    href?: string;
+    closingReason?: string;
+    closedAt?: string;
+
+    // Other common fields
+    to?: string;
+    from?: string;
+    channel?: string;
   };
 }
 
@@ -91,7 +91,7 @@ export interface ParsedContact {
 
 export interface ParsedConversation {
   uuid: string;
-  status: CallbellConversationStatus;
+  status: "open" | "closed" | "assigned";
 }
 
 export interface ParsedPayload {
