@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload, ParsedMessage, ParsedContact } from "../callbell/types.js";
+import { auditCasoCreado } from "../auditService.js";
 
 // -----------------------------------------------------------
 // Constants
@@ -101,6 +102,7 @@ export async function findByCallbellUuid(
 export async function createCaso(
   supabase: SupabaseClient,
   parsed: ParsedPayload,
+  correlationId: string,
 ): Promise<CasoRow | null> {
   console.log("[CASO] Iniciando createCaso");
 
@@ -174,6 +176,17 @@ export async function createCaso(
   } else {
     console.log("[CASO] Resultado INSERT extracciones_ia — OK");
   }
+
+  // --- 3. Auditar (semántico, no bloqueante) ---
+  auditCasoCreado(supabase, {
+    casoId: casoRow.id,
+    conversationUuid: conversation.uuid,
+    tipoCaso: casoInput.tipo_caso,
+    estadoInicial: casoInput.estado,
+    contactoNombre: contact.name,
+    contactoTelefono: contact.phone,
+    correlationId,
+  }).catch((err) => console.error("[AUDIT] Error no bloqueante:", err));
 
   console.log("[CASO] createCaso completado — caso:", casoRow.id);
   return casoRow;
