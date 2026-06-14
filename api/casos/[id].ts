@@ -6,7 +6,7 @@
 //   id — ID del caso (ej: LV-0001)
 // ============================================================
 
-import { getSupabaseAdmin, CASOS_SELECT } from "../_lib/supabaseAdmin";
+import { getSupabaseAdmin, CASOS_SELECT } from "../_lib/supabaseAdmin.js";
 
 export default async function handler(req: any, res: any) {
   // --- Solo GET ---
