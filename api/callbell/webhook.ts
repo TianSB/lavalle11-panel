@@ -37,6 +37,14 @@ function getSupabaseAdmin() {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        return fetch(input, {
+          ...init,
+          signal: AbortSignal.timeout(10_000),
+        });
+      },
+    },
   });
 }
 
