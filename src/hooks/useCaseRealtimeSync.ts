@@ -154,14 +154,23 @@ export function useCaseRealtimeSync(
   const hiddenSinceRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    console.log("[REALTIME] useEffect montado — user:", user?.id);
+
+    if (!user) {
+      console.log("[REALTIME] Sin usuario autenticado — cancelando suscripción");
+      return;
+    }
 
     // Flag para ignorar el primer SUBSCRIBED (useCasos() ya fetcheó datos al montar)
     const isFirstSubscription = { current: true };
 
     // Suscribirse a cambios en la tabla casos
     const channel = supabase
-      .channel(REALTIME_CHANNEL)
+      .channel(REALTIME_CHANNEL);
+
+    console.log("[REALTIME] Canal creado:", REALTIME_CHANNEL, "— iniciando suscripción");
+
+    channel
       .on(
         "postgres_changes",
         {
@@ -175,6 +184,8 @@ export function useCaseRealtimeSync(
             new: Record<string, unknown>;
             old: Record<string, unknown>;
           };
+
+          console.log("[REALTIME] Evento recibido:", event.eventType, "— caso:", event.new?.id, "payload:", JSON.stringify(event));
 
           // --- Step 1: Dedup event ---
           const eventId = buildEventId(event.new);
@@ -194,6 +205,8 @@ export function useCaseRealtimeSync(
         },
       )
       .subscribe(async (status) => {
+        console.log("[REALTIME] subscribe status:", status);
+
         // --- Reconnect handler ---
         // Cuando Supabase Realtime se reconecta, limpiamos la caché de
         // dedup para asegurar que eventos pendientes se procesen.
