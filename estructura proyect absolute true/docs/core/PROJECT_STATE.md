@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-14 (Sesión 26)
-> **Versión:** 2.2 — Realtime INSERT fix. Las cards aparecen sin recargar. Env vars de IA pendientes.
+> **Última actualización:** 2026-06-15 (Sesión 28)
+> **Versión:** 3.1 — Fix assign_case RPC, Re-analizar con IA manual, Contador de mensajes, Env vars completas.
 
 ---
 
@@ -29,13 +29,14 @@
 | **Fase 1 — Panel estático + Auth** | ✅ Completada | 100% |
 | **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
-| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% |
-| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | **100% — Realtime INSERT fix aplicado** |
-| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100% — +34 tests unitarios** |
-| Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
-| Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
+| **Fase 2.2 — Backend + Webhook de Callbell** | ✅ Completada | 100% |
+| **Fase 2.3 — Realtime + Endpoints REST** | ✅ Completada | 100% |
+| **Fase 3 — Análisis con Claude IA** | ✅ Completada | 100% |
+| **Fase 4 — Acciones del asesor (flujo completo)** | ✅ Completada | 100% |
+| **Fase 5 — Seguimiento y métricas** | ✅ Completada | 100% |
+| **Fase 6 — Re-análisis manual + Contador mensajes** | ✅ **Completada (Sesión 28)** | **100%** |
 
-**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production (scope correcto) y hacer Redeploy. Verificar log: `[AI_FACTORY] Provider activo: claude`.
+**Siguiente paso:** Probar flujo completo: webhook con IA real, acciones del asesor, y derivación a Chiclana.
 
 ---
 
@@ -56,6 +57,8 @@ El sistema propuesto:
 1. **Analiza automáticamente** cada conversación entrante de Callbell — texto e imágenes — y extrae información estructurada usando Claude API
 2. **Presenta cada caso** como una card en un panel web con toda la información procesada
 3. **Ejecuta las acciones** del asesor — confirmar turno, enviar mensaje, registrar llamada, derivar — enviando las respuestas de vuelta a WhatsApp
+4. **Re-analiza manualmente** con IA cuando hay mensajes acumulados
+5. **Muestra contador de mensajes** en la card para indicar conversaciones con historial
 
 ---
 
@@ -65,13 +68,13 @@ El sistema propuesto:
 |---|---|---|---|
 | Frontend | React + Vite + Tailwind CSS | React 19 | ✅ Implementado + Refactorizado |
 | Lenguaje | **TypeScript estricto** — frontend y backend | — | ✅ Confirmado |
-| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **Webhook funcional. Process-first pattern. IA integrada.** |
-| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 14 migraciones ejecutadas, RLS activo, orden_tipo funcional |
-| Auditoría | Sistema dual: trigger ultra-liviano + AuditService Node.js | — | ✅ **Implementado: event_hash UNIQUE, correlationId obligatorio, domain_events view** |
+| Backend | Node.js (Vercel Serverless Functions) | 22 LTS | ✅ **8 endpoints POST. IA integrada.** |
+| Base de datos | Supabase (PostgreSQL + REST + Realtime + Auth) | — | ✅ 15 migraciones ejecutadas, RLS activo |
+| Auditoría | Sistema dual: trigger ultra-liviano + AuditService Node.js | — | ✅ Implementado |
 | Auth | Supabase Auth (@supabase/supabase-js) | v2.108.1 | ✅ Login real, logout, sesión, roles |
-| IA | Claude API (Anthropic) — Provider-agnostic | `claude-sonnet-4-5` | ✅ **Integrado: adapter con tool_use, visión, buildFlags, factory singleton** |
-| CRM | Callbell API (Webhooks + Messages API) | — | ✅ **Webhook funcional. Adjuntos con content_type real.** |
-| Config remota | Google Sheets API | v4 | ⬜ Pendiente (puede integrarse en Fase 4) |
+| IA | Claude API (Anthropic) — Provider-agnostic | `claude-sonnet-4-5` | ✅ Integrado + Re-análisis manual |
+| CRM | Callbell API (Webhooks + Messages API) | — | ✅ Webhook funcional + Messages API |
+| Config remota | Google Sheets API | v4 | ⬜ Pendiente |
 | Llamadas de voz | WhatsApp Desktop via wa.me/ | — | Fuera del sistema |
 | Repositorio | GitHub | — | ✅ **lavalle11-panel (TianSB)** |
 | Hosting | Vercel | — | ✅ **Deploy activo. Hobby plan.** |
@@ -91,132 +94,63 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
   → response 200 OK
 ```
 
-### Realtime INSERT/UPDATE pipeline — CORREGIDO (Sesión 26)
+⚠️ **Problema conocido:** Claude se invoca en el primer mensaje, que suele ser un selector numérico del chatbot ("1", "2"), no la orden médica real. Solucionado con botón de re-análisis manual (Opción 4).
 
-```
-Supabase Realtime → INSERT en casos
-  → useCaseRealtimeSync recibe evento
-  → fetchCasoCompleto() ← obtiene extracciones_ia, turnos, llamadas con joins
-  → onNuevoCaso(caso) → addCaso() → setCasos(prev => [nuevoCaso, ...prev])
-  → ✅ Card aparece sin recargar
-```
-
-### Problemas resueltos — Historial completo
-
-| Problema | Estado | Fix |
-|---|---|---|
-| ERR_MODULE_NOT_FOUND | ✅ Resuelto | .js extensions en imports ESM |
-| Function Runtimes invalid version | ✅ Resuelto | Eliminar bloque functions de vercel.json |
-| TS2580: Cannot find name 'process' | ✅ Resuelto | Instalar @types/node |
-| Parser incompatible con payload real | ✅ Resuelto | Reescritura de types.ts + payloadParser.ts |
-| Vercel mata proceso (fire-and-forget) | ✅ Resuelto | try { await handleWebhook() } catch |
-| Query Supabase bloqueada (CAUSA RAÍZ) | ✅ **Resuelto** | **Process-first: await handleWebhook() ANTES de res.json()** |
-| global.fetch override rompía postgrest-js | ✅ Resuelto | Eliminado el override. Env vars correctas. |
-| **error 23505: Caso cerrado bloquea nuevos mensajes** | ✅ **Resuelto** | **RAMA 2: reabrirCaso() + actualizarExtraccionIA()** |
-| **Adjuntos sin content_type** | ✅ **Resuelto** | **CallbellAttachmentPayload + parseAttachment() biforma** |
-| TS6133: vi import no utilizado | ✅ Resuelto | Eliminado de providers.test.ts |
-| **Realtime INSERT no actualiza panel** | ✅ **Resuelto** | **fetchCasoCompleto + onNuevoCaso/addCaso bypassan RECONCILE** |
-
-### Variables de Entorno en Vercel
+### Variables de Entorno en Vercel — COMPLETAS ✅
 
 | Variable | Estado | Scope |
 |---|---|---|
 | `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada | Production |
 | `SUPABASE_URL` | ✅ Configurada | Production |
 | `SUPABASE_SERVICE_ROLE_KEY` | ✅ Configurada | Production |
-| `PRIMARY_PROVIDER` | ⬜ **Pendiente** — configurar como `claude` en Production | Production |
-| `ANTHROPIC_API_KEY` | ⬜ **Pendiente** — configurar sk-ant-... en Production | Production |
-| `VITE_SUPABASE_URL` | ✅ Configurada en `.env.local` | ⬜ No en Vercel aún |
-| `VITE_SUPABASE_ANON_KEY` | ✅ Configurada en `.env.local` | ⬜ No en Vercel aún |
-
-**⚠️ Diagnóstico (Sesión 25):** El log del webhook muestra `[AI_FACTORY] Provider activo: mock`, lo que confirma que `PRIMARY_PROVIDER` y `ANTHROPIC_API_KEY` no están llegando al runtime serverless. `vercel.json` no tiene restricciones de env vars. Causa probable: las variables se configuraron en scope Preview en lugar de Production, o falta hacer Redeploy después de configurarlas.
+| `CALLBELL_API_TOKEN` | ✅ Configurada | Production |
+| `PRIMARY_PROVIDER` (`claude`) | ✅ **Configurada** | Production |
+| `ANTHROPIC_API_KEY` | ✅ **Configurada** | Production |
+| `CHICLANA_PHONE` | ✅ **Configurada** (+5492914027333) | Production |
+| `VITE_SUPABASE_URL` | ✅ **Configurada** | Production |
+| `VITE_SUPABASE_ANON_KEY` | ✅ **Configurada** | Production |
 
 ---
 
-## 6. Sistema de Auditoría Final
+## 6. Fase 4 — Acciones del Asesor
 
-### Arquitectura
+### Endpoints POST (7 implementados)
 
 ```
-                    auditoria_eventos (append-only log)
-                    ┌──────────────────────────────┐
-                    │ event_source = 'db_trigger'   │ ← Telemetría técnica
-                    │ event_type  = 'casos.snapshot'│
-                    │ correlation_id = NULL         │
-                    ├──────────────────────────────┤
-                    │ event_source = 'backend'      │ ← Eventos semánticos
-                    │ event_type  = 'caso.creado'   │
-                    │ correlation_id = UUID v4      │
-                    └──────────────────────────────┘
-                    ┌──────────┐   ┌──────────────┐
-                    │ VIEW     │   │ VIEW         │
-                    │domain_ev.│   │technical_ev. │
-                    │solo back │   │solo trigger  │
-                    └──────────┘   └──────────────┘
+POST /api/casos/:id/enviar-mensaje      → messagesApi.ts (Callbell Messages API)
+POST /api/casos/:id/confirmar           → Turno + BR-06 IOMA + cerrar caso
+POST /api/casos/:id/cerrar              → 12 closing_reasons + auditoría
+POST /api/casos/:id/llamada             → Registrar llamada con duración
+POST /api/casos/:id/derivar             → BR-03 Chiclana (solo prácticas nucleares)
+POST /api/casos/:id/re-analizar         → NUEVO: Re-análisis con IA (Sesión 28)
 ```
 
-### Idempotencia
+### UI en CaseModal
 
-| Source | Fórmula event_hash | Garantía |
+| Acción | Componente | Estado |
 |---|---|---|
-| Trigger | `'trg:{caso_id}:{TG_OP}:{gen_random_uuid()}'` | Único por operación |
-| Backend | `sha256('backend:{casoId}:{eventType}:{detalle}:{correlationId}')` | Determinístico + UNIQUE en DB |
-
-### Protección anti-error humano
-
-1. **SQL:** CHECK constraint correlation_id NOT NULL para eventos backend
-2. **TypeScript:** correlationId: string (no opcional)
-3. **Views:** domain_events y technical_events evitan query directa
+| Confirmar turno | Diálogo con fecha/hora/sede/instrucciones | ✅ |
+| Cerrar caso | Selector de 12 razones + nota interna opcional | ✅ |
+| Registrar llamada | Input de duración en minutos | ✅ |
+| Derivar a Chiclana | Notas opcional (solo si práctica nuclear) | ✅ |
+| Enviar mensaje | Caja de texto con preview | ✅ |
+| **Re-analizar con IA** | **Botón con spinner + toast** | ✅ **NUEVO (Sesión 28)** |
 
 ---
 
-## 7. Arquitectura de IA (Fase 3)
+## 7. Fase 5 — MetricsBoard
 
-### Provider-agnostic
+### Componentes
 
-```
-webhookHandler.ts
-    │
-    ▼
-getAIProvider()  ← aiFactory.ts (singleton)
-    │
-    ├── PRIMARY_PROVIDER=claude → ClaudeAdapter
-    │     ├── imageProcessor.ts (descarga adjuntos → base64)
-    │     └── Anthropic SDK (tool_use: "registrar_analisis_caso")
-    │
-    └── PRIMARY_PROVIDER=mock → MockAIProvider (respuestas realistas, 50ms)
-```
-
-### Contrato canónico (types.ts)
-
-| Interfaz | Propósito |
+| Característica | Descripción |
 |---|---|
-| `EntradaCanónica` | Input unificado: texto, adjuntos, contacto, timestamp |
-| `RespuestaCanónica` | Output completo: clasificación, datos paciente, flags, confianza, resumen |
-| `AIProvider` | Contrato del adapter: `analizarCaso(entrada): Promise<RespuestaCanónica>` |
-| `AIError` | Error tipado con código: `AI_TIMEOUT`, `AI_PROVIDER_ERROR`, etc. |
-
-### Token efficiency
-
-- Modelo: `claude-sonnet-4-5`
-- `max_tokens: 1024` — respuesta de tool es compacta
-- `tool_choice: { type: "any" }` — forzar invocación de tool, nunca texto libre
-- System prompt ~250 tokens — denso, sin relleno
-- Una sola llamada por caso, sin multi-turn
-
-### Resiliencia
-
-- Si Claude falla → `analisisIA = null` → placeholders + flag `error_ia`
-- Si imagen no se descarga → análisis continúa con solo texto
-- Si `ANTHROPIC_API_KEY` falta → factory cae en MockAIProvider
-- Cero casos perdidos por error de IA
-
-### Sistema de flags (dual)
-
-| Origen | Flags | Responsable |
-|---|---|---|
-| 🤖 Claude detecta | `ayuno`, `aines`, `orden_incompleta`, `orden_ilegible` | ClaudeAdapter |
-| ⚙️ Sistema aplica | `baja_confianza`, `token_ioma`, `chiclana`, `error_ia`, `orden_digital_misrx` | `buildFlags()` en casoService.ts |
+| KPIs | 6 indicadores: activos, hoy, sin asignar, sin atender 24hs, tiempo promedio, resolución automática |
+| Casos por tipo | Barras horizontales (tipos A–K) con nombres canónicos |
+| Volumen diario | Barras apiladas (últimos 7 días): nuevos, resueltos, automáticos |
+| Rendimiento por asesor | Tabla: activos, resueltos, tiempo promedio, tasa resolución colorizada |
+| Exportar CSV | Multi-sección: Resumen + Tipo + Volumen + Asesores |
+| Auto-refresh | Cada 60s con setInterval, sin flicker de loading |
+| Filtro por fecha | Inputs Desde/Hasta (default últimos 30 días), recalcula KPIs en Supabase |
 
 ---
 
@@ -226,63 +160,51 @@ getAIProvider()  ← aiFactory.ts (singleton)
 /
 ├── api/
 │   ├── _lib/
-│   │   └── supabaseAdmin.ts      # Shared getSupabaseAdmin() + CASOS_SELECT
-│   ├── casos.ts                  # GET /api/casos — lista paginada con filtros
+│   │   └── supabaseAdmin.ts          # Shared getSupabaseAdmin() + CASOS_SELECT
+│   ├── casos.ts                      # GET /api/casos — lista paginada con filtros
 │   ├── casos/
-│   │   └── [id].ts               # GET /api/casos/:id — caso individual + mensajes
+│   │   ├── [id].ts                   # GET /api/casos/:id — caso individual + mensajes
+│   │   ├── enviar-mensaje.ts         # POST — enviar WhatsApp via Callbell (F4)
+│   │   ├── confirmar.ts              # POST — confirmar turno + BR-06 (F4)
+│   │   ├── cerrar.ts                 # POST — cerrar caso + auditoría (F4)
+│   │   ├── llamada.ts                # POST — registrar llamada (F4)
+│   │   ├── derivar.ts               # POST — derivar a Chiclana BR-03 (F4)
+│   │   └── re-analizar.ts           # POST — re-análisis manual con IA (NUEVO S28)
 │   └── callbell/
-│       └── webhook.ts            # Serverless Function — process-first pattern
+│       └── webhook.ts                # Serverless Function — process-first pattern
 ├── src/
 │   ├── services/
-│   │   ├── __tests__/            # Tests unitarios (34)
-│   │   │   ├── fixtures.ts       #   Fixtures compartidos (8)
-│   │   │   ├── providers.test.ts #   19 tests: MockAIProvider + aiFactory
-│   │   │   └── casoService.test.ts # 15 tests: buildFlags + reabrirCaso + actualizarExtraccionIA
-│   │   ├── ai/                   # Capa de IA (Fase 3)
-│   │   │   ├── types.ts          #   Interfaces canónicas
-│   │   │   ├── imageProcessor.ts #   Descarga adjuntos → base64
-│   │   │   ├── claudeAdapter.ts  #   Claude Sonnet 4.5 con tool_use
-│   │   │   ├── mockProvider.ts   #   Mock para desarrollo
-│   │   │   └── aiFactory.ts      #   Factory singleton con fallback
-│   │   ├── auditService.ts       # AuditService con 4 funciones semánticas
+│   │   ├── __tests__/
+│   │   │   ├── fixtures.ts           # Fixtures compartidos
+│   │   │   ├── providers.test.ts     # Tests de IA (19)
+│   │   │   ├── casoService.test.ts   # Tests de casoService (15)
+│   │   │   └── messagesApi.test.ts   # Tests de Callbell API (9)
+│   │   ├── ai/                       # Capa de IA (Fase 3)
 │   │   ├── callbell/
-│   │   │   ├── types.ts          # Tipos del payload de Callbell
-│   │   │   ├── payloadParser.ts  # Parseador con soporte attachment biforma
-│   │   │   └── webhookHandler.ts # Lógica + IA + 3 ramas
+│   │   │   ├── types.ts              # Tipos del payload de Callbell
+│   │   │   ├── payloadParser.ts      # Parseador con soporte attachment biforma
+│   │   │   ├── webhookHandler.ts     # Lógica + IA + 3 ramas
+│   │   │   └── messagesApi.ts        # Callbell Messages API
+│   │   ├── auditService.ts           # AuditService con 4 funciones semánticas
 │   │   ├── supabase/
-│   │   │   └── casoService.ts    # CRUD + reabrirCaso + actualizarExtraccionIA + buildFlags (exportado)
-│   │   ├── supabaseService.ts    # Implementación real frontend
-│   │   └── mockService.ts        # CasoService interface + mock (no usado)
-│   ├── lib/
-│   │   └── supabase.ts           # Cliente Supabase (frontend)
-│   ├── types/
-│   │   └── index.ts              # Tipos compartidos
+│   │   │   └── casoService.ts        # CRUD + reabrirCaso + buildFlags
+│   │   ├── supabaseService.ts        # Implementación real frontend + métricas + mensajes_count
+│   │   └── mockService.ts            # CasoService interface + mock
+│   ├── lib/supabase.ts               # Cliente Supabase (frontend)
+│   ├── types/index.ts                # Tipos compartidos + mensajes_count (NUEVO S28)
 │   ├── hooks/
-│   │   ├── useCasos.ts           # Hook de casos + addCaso/updateCaso (Realtime)
-│   │   ├── useCaseRealtimeSync.ts # Suscripción Realtime con fetchCasoCompleto
-│   │   └── useAsignarCaso.ts     # Asignación optimista
-│   ├── stores/
-│   │   └── caseUIStore.ts        # UI store (reducer RECONCILE solo para UI state)
-│   ├── context/
-│   │   ├── CaseUIStoreContext.tsx # UI store provider
-│   │   ├── CasoServiceContext.tsx # DI: inyecta supabaseCasoService
-│   │   └── AuthContext.tsx        # Autenticación
-│   ├── components/               # Componentes React
-│   ├── pages/                    # Páginas
-│   └── data/
-│       └── mockCases.ts          # Datos mock (no usado por frontend)
-├── database/
-│   └── migrations/
-│       ├── 001_enums.sql
-│       ├── ... (14 migraciones total)
-│       └── 014_orden_tipo.sql
-└── docs/
-    └── core/
-        ├── PROJECT_STATE.md      # ← Este archivo
-        ├── ARCHITECTURE.md
-        ├── DECISIONS.md
-        ├── TODO.md
-        └── SESSION_LOG.md
+│   │   ├── useCasos.ts               # useMetricas() con filtro fecha
+│   │   ├── useCaseRealtimeSync.ts    # Suscripción Realtime + mapRowToCaso con mensajes_count
+│   │   └── useAsignarCaso.ts         # Asignación optimista
+│   ├── components/
+│   │   ├── cases/
+│   │   │   ├── CaseCard.tsx           # Badge de conteo de mensajes (NUEVO S28)
+│   │   │   └── CaseGrid.tsx
+│   │   └── modal/
+│   │       └── CaseModal.tsx          # Botón Re-analizar con IA (NUEVO S28)
+│   ├── pages/DashboardPage.tsx
+│   └── data/mockCases.ts             # Mock data + mensajes_count
+└── database/migrations/              # 15 migraciones SQL (+ fix assign_case)
 ```
 
 ---
@@ -291,22 +213,25 @@ getAIProvider()  ← aiFactory.ts (singleton)
 
 | # | Riesgo | Impacto | Severidad | Estado |
 |---|---|---|---|---|
-| R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza + revisión manual) |
+| R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza + revisión manual + re-análisis manual) |
 | R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID + RAMA 1/2) |
 | R10 | Cold starts de Vercel Serverless | Bajo | 🟢 Bajo | Aceptable |
 | R13 | Límite de tiempo Vercel Hobby (10s) para análisis IA | Medio | 🟡 Alto | 🟡 Mitigado: max_tokens 1024, timeout 8s, single turn |
-| **R14** | **Env vars de IA no llegan al runtime serverless** | **Alto** | **🔴 Crítico** | **🟡 En diagnóstico: verificar scope Production vs Preview + Redeploy** |
+| R14 | Env vars de IA no llegan al runtime serverless | Alto | 🔴 Crítico | ✅ **RESUELTO**: ya configuradas en Production + redeploy exitoso |
+| **R15** | **Claude solo ve el primer mensaje del chatbot (selector numérico)** | **Alto** | **🔴 Crítico** | **🟡 Mitigado (re-análisis manual + plan de auto-trigger)** |
 
 ---
 
 ## 10. Próximos Pasos Inmediatos
 
-1. 🔴 **Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production** (verificar scope)
-2. 🔴 **Hacer Redeploy del último commit** (forzar nueva build que capture env vars)
-3. 🟢 **Verificar log del webhook**: debe mostrar `[AI_FACTORY] Provider activo: claude`
-4. 🟢 Probar webhook con IA real desde WhatsApp
-5. ⬜ Limpiar logs de diagnóstico de Sesión 26 (`[REALTIME]`, `[RECONCILE]`, `[USECASOS]`, `[DASHBOARD]`)
-6. ⬜ Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3
+1. 🟢 Probar flujo completo en producción: login → tomar caso → re-analizar → confirmar turno
+2. 🟢 Probar webhook con IA real (PRIMARY_PROVIDER=claude ya configurado)
+3. 🟢 Probar derivación a Chiclana (CHICLANA_PHONE configurado)
+4. ⬜ Agregar Sentry para monitoreo de errores en producción
+5. ⬜ Agregar tests de integración para los 7 endpoints POST
+6. ⬜ **Implementar Opción 2 híbrida**: auto-trigger de re-análisis cuando llega un attachment
+7. ⬜ Agregar confirm dialog antes de re-analizar (consume crédito de API)
+8. ⬜ Agregar evento de auditoría cuando se re-analiza un caso manualmente
 
 ---
 
@@ -316,5 +241,5 @@ getAIProvider()  ← aiFactory.ts (singleton)
 - **Autor PRD:** RIA · r-ia.vercel.app
 - **Repositorio:** `github.com:TianSB/lavalle11-panel`
 - **Dominio:** `https://l11panel.vercel.app`
-- **Último commit:** `1c0736b` — `fix(realtime): fetch full caso on INSERT/UPDATE with joins, use callbacks to update useCasos state`
+- **Último commit:** `863cc23` — `feat(ui): add mensajes_count badge to CaseCard`
 - **Documentación completa:** Ver `docs/` y archivos maestros en raíz

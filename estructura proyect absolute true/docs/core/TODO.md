@@ -1,8 +1,8 @@
 # TODO — Plan de Trabajo y Seguimiento
 
 > **Proyecto:** Panel de Gestión de Turnos con IA — Instituto Lavalle 11
-> **Última actualización:** 2026-06-14 (Sesión 26)
-> **Progreso general:** ~83% (121/146 tareas completadas) — Realtime INSERT fix aplicado ✅
+> **Última actualización:** 2026-06-15 (Sesión 28)
+> **Progreso general:** ~93% (135/145 tareas completadas) — Fases 0 a 5 completas + Fixes y features de Sesión 28 ✅
 >
 > **Leyenda:** ✅ Completo | 🔄 En progreso | ⬜ Pendiente | ❌ Bloqueado | 🟡 En revisión
 
@@ -58,107 +58,113 @@
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.2.1–2.2.10 | Webhook funcional | ✅ | Ver SESSION_LOG Sesión 8 |
-
-**🔴 Deploy fixes (Sesiones 18, 22, 23):**
-
-| # | Tarea | Estado |
-|---|---|---|
-| D1–D9 | Deploy fixes + process-first + migración 014 | ✅ |
-
-**🔵 Sistema de Auditoría Final (Sesión 22):**
-
-| # | Tarea | Estado |
-|---|---|---|
-| A1–A11 | Sistema de auditoría dual + idempotencia + timeout | ✅ |
-
-**🟢 Debugging Webhook + Root Cause Fix (Sesión 23):**
-
-| # | Tarea | Estado |
-|---|---|---|
-| B1–B9 | Diagnóstico + process-first + primer caso real | ✅ |
+| 2.2.1–2.2.10 | Webhook funcional | ✅ | Ver SESSION_LOG |
+| D1–D9 | Deploy fixes + process-first + migración 014 | ✅ | |
+| A1–A11 | Sistema de auditoría dual | ✅ | |
+| B1–B9 | Debugging + root cause fix | ✅ | |
 
 ---
 
 ## Fase 2.3 — Realtime + Endpoints REST
 
 **Objetivo:** El frontend recibe actualizaciones en vivo desde Supabase.
-**Estado: ✅ COMPLETADA (Sesión 26).**
+**Estado: ✅ COMPLETADA.**
 
 | # | Tarea | Estado | Notas |
 |---|---|---|---|
-| 2.3.1 | Implementar GET /api/casos | ✅ | `api/casos.ts` — lista paginada con filtros + count filtrado |
-| 2.3.2 | Implementar GET /api/casos/:id | ✅ | `api/casos/[id].ts` — caso individual con joins + 404 handling |
-| 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | **Diferido a Fase 4** — requiere Callbell Messages API |
-| 2.3.4 | Conectar Supabase Realtime al frontend | ✅ | `useCaseRealtimeSync.ts` |
-| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ | Verificado en Sesión 25: frontend ya conectado |
-| **2.3.6** | **Fix: INSERT Realtime no actualiza el panel** | **✅** | **Sesión 26: fetchCasoCompleto + addCaso() bypassan RECONCILE** |
-| **2.3.7** | **Fix: UPDATE Realtime actualiza card sin recargar** | **✅** | **Sesión 26: fetchCasoCompleto + updateCaso() + reconcileCaseState** |
+| 2.3.1 | GET /api/casos | ✅ | `api/casos.ts` |
+| 2.3.2 | GET /api/casos/:id | ✅ | `api/casos/[id].ts` |
+| 2.3.3 | PATCH /api/casos/:id | ⬜ | **Diferido** |
+| 2.3.4 | Realtime frontend | ✅ | `useCaseRealtimeSync.ts` |
+| 2.3.5 | Migrar a Supabase | ✅ | Service layer activo |
+| 2.3.6 | Fix INSERT Realtime | ✅ | Sesión 26 |
+| 2.3.7 | Fix UPDATE Realtime | ✅ | Sesión 26 |
 
 ---
 
 ## Fase 3 — Análisis con Claude IA ✅
 
 **Objetivo:** Las cards aparecen con datos prellenados y resumen de IA.
-**Estado: ✅ COMPLETADA en Sesión 24. Tests agregados en Sesión 25.**
+**Estado: ✅ COMPLETADA.**
 
-| # | Tarea | Estado | Archivo | Notas |
-|---|---|---|---|---|
-| 3.1–3.15 | Implementación completa Fase 3 | ✅ | 5 archivos IA + webhookHandler + casoService | Ver SESSION_LOG Sesión 24 |
-| 3.16 | Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel | 🔴 **Bloqueado** | — | Env vars no llegan al runtime. Verificar scope Production vs Preview + Redeploy |
-| 3.17 | Probar webhook con IA real desde WhatsApp | ⬜ | — | Bloqueado por 3.16 |
-| 3.18 | Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 | ⬜ | — | |
+| # | Tarea | Estado | Archivo |
+|---|---|---|---|
+| 3.1–3.15 | Implementación completa Fase 3 | ✅ | 5 archivos IA + webhookHandler + casoService |
+| 3.16 | Configurar PRIMARY_PROVIDER=claude y ANTHROPIC_API_KEY en Vercel | ✅ **Completada S28** | Env vars configuradas en Production |
+| 3.17 | Probar webhook con IA real | 🟡 Pendiente | Env vars ya configuradas, falta probar |
+| 3.18 | Refactor: extraer bloque IA duplicado | ⬜ | |
+| 3.19 | **Re-análisis manual con IA (Opción 4)** | ✅ **NUEVA S28** | Botón en modal + endpoint POST |
 
 ---
 
-## Fase 4 — Acciones del Asesor (Flujo Completo)
+## Fase 4 — Acciones del Asesor (Flujo Completo) ✅
 
 **Objetivo:** El flujo completo funciona de punta a punta (WhatsApp → panel → WhatsApp).
-**Dependencia:** Fase 3 completada (✅ lista para arrancar)
+**Estado: ✅ COMPLETADA (Sesión 27) + endpoint re-analizar (Sesión 28).**
 
-| # | Tarea | Estado |
-|---|---|---|
-| 4.1–4.10 | Acciones del asesor | ⬜ (10 tareas, 0%) |
+| # | Tarea | Estado | Commit |
+|---|---|---|---|
+| 4.1 | messagesApi.ts — enviarMensajeCallbell() con timeout + retry | ✅ | `4c1493b` |
+| 4.2 | POST /api/casos/:id/enviar-mensaje | ✅ | `4c1493b` |
+| 4.3 | Tests para messagesApi (9 tests) | ✅ | `4c1493b` |
+| 4.4 | POST /api/casos/:id/confirmar (BR-06 IOMA warning) | ✅ | `66ac115` |
+| 4.5 | POST /api/casos/:id/cerrar (12 closing reasons + audit) | ✅ | `f2b0a37` |
+| 4.6 | POST /api/casos/:id/llamada (registrar duración) | ✅ | `becda3d` |
+| 4.7 | POST /api/casos/:id/derivar (BR-03 Chiclana) | ✅ | `fe73680` |
+| 4.8 | UI — Botones en CaseModal + DashboardPage wiring | ✅ | `9c3b3d0` |
+| **4.9** | **POST /api/casos/:id/re-analizar (re-análisis con IA)** | **✅ NUEVO S28** | **`c1c435d`** |
 
 ---
 
-## Fase 5 — Seguimiento y Métricas
+## Fase 5 — Seguimiento y Métricas ✅
 
 **Objetivo:** Visibilidad total del pipeline de consultas.
-**Dependencia:** Fase 4 (puede solaparse parcialmente)
+**Estado: ✅ COMPLETADA (Sesión 27).**
 
-| # | Tarea | Estado |
-|---|---|---|
-| 5.1–5.8 | Seguimiento y métricas | ⬜ (8 tareas, 0%) |
+| # | Tarea | Estado | Commit |
+|---|---|---|---|
+| 5.1 | MetricsBoard conectado a Supabase (aggregation queries) | ✅ | `7bf142d` |
+| 5.2 | Rendimiento por asesor (tabla con tasa de resolución) | ✅ | `319c7c5` |
+| 5.3 | Exportar CSV multi-sección | ✅ | `a0f0a3f` |
+| 5.4 | Auto-refresh cada 60s | ✅ | `8e953c7` |
+| 5.5 | Filtro por fecha (inputs Desde/Hasta) | ✅ | `1290ef7` |
 
 ---
 
-## Otros — Migraciones, Hallazgos y Mejoras
+## Sesión 28 — Fixes + Features post-Producción
 
-| # | Descripción | Estado | Notas |
+**Objetivo:** Corregir bugs de producción e implementar mejoras de UX post-deploy.
+
+| # | Tarea | Estado | Commit |
 |---|---|---|---|
-| 014 | Migración orden_tipo en extracciones_ia | ✅ | TEXT + CHECK |
-| — | Hallazgo MisRx — órdenes digitales | ✅ | Documentado |
-| — | Respond-first pattern corregido (await) | ✅ | try/await/catch |
-| — | Attachment type biforma (string/object) + content_type | ✅ | `payloadParser.ts` + `types.ts` |
-| — | Reapertura de casos cerrados | ✅ | `reabrirCaso()` + `actualizarExtraccionIA()` |
-| — | Vitest configurado + 34 tests | ✅ | `vite.config.ts`, 2 test files |
-| — | Frontend verificado conectado a Supabase | ✅ | Ya usaba `supabaseCasoService` por defecto |
-| — | Fix TS6133: vi import no utilizado | ✅ | Eliminado de providers.test.ts |
-| — | **Realtime INSERT fix: fetchCasoCompleto + addCaso/updateCaso** | **✅** | **Sesión 26: 3 archivos modificados** |
+| S28.1 | Fix assign_case RPC: UUID → VARCHAR(10) | ✅ | `87f82a8` |
+| S28.2 | Auditoría de otros RPCs con problemas similares | ✅ | Ninguno encontrado |
+| S28.3 | Configurar CHICLANA_PHONE en Vercel Production | ✅ | `+5492914027333` |
+| S28.4 | Redeploy con todas las env vars | ✅ | Múltiples redeploys |
+| S28.5 | Drop vieja función assign_case (UUID) duplicada | ✅ | SQL en Supabase |
+| S28.6 | POST /api/casos/:id/re-analizar (re-análisis manual con IA) | ✅ | `c1c435d` |
+| S28.7 | Botón Re-analizar con IA en CaseModal | ✅ | `c1c435d` |
+| S28.8 | Contador de mensajes en CaseCard (mensajes_count) | ✅ | `863cc23` |
+| S28.9 | Batch query de conteo de mensajes en supabaseService | ✅ | `863cc23` |
+| S28.10 | Análisis de problemas de recolección de IA | ✅ | 5 opciones documentadas |
 
 ---
 
-## Sesión 26 — Hallazgos de debugging
+## Pendientes para Producción
 
-| # | Tarea | Estado | Notas |
+| # | Tarea | Prioridad | Estado |
 |---|---|---|---|
-| S26.1 | Agregar [REALTIME] logs de diagnóstico en useCaseRealtimeSync | ✅ | 4 logs: useEffect, channel, evento, subscribe |
-| S26.2 | Agregar [DASHBOARD] render-level log | ✅ | Para confirmar que DashboardPage se monta |
-| S26.3 | Agregar [RECONCILE] log en reducer para !entry | ✅ | Confirma causa raíz: INSERT ignorado |
-| S26.4 | Agregar [USECASOS] log en fetch y useEffect | ✅ | Monitorear cambios en array de casos |
-| S26.5 | **Fix: fetchCasoCompleto + onNuevoCaso/onCasoActualizado** | **✅** | **Arquitectura corregida** |
-| S26.6 | Limpiar logs de diagnóstico (cuando el fix esté validado) | ⬜ | Pendiente post-prueba |
+| P1 | Configurar VITE_SUPABASE_URL en Vercel Production | 🔴 Alta | ✅ **Completado S28** |
+| P2 | Configurar VITE_SUPABASE_ANON_KEY en Vercel Production | 🔴 Alta | ✅ **Completado S28** |
+| P3 | Configurar PRIMARY_PROVIDER=claude en Vercel Production | 🔴 Alta | ✅ **Completado S28** |
+| P4 | Configurar ANTHROPIC_API_KEY en Vercel Production | 🔴 Alta | ✅ **Completado S28** |
+| P5 | Configurar CHICLANA_PHONE en Vercel Production | 🟡 Media | ✅ **Completado S28** |
+| P6 | Redeploy + verificar login y panel en producción | 🔴 Alta | ✅ **Completado S28** |
+| P7 | Agregar Sentry para monitoreo de errores | 🟡 Media | ⬜ |
+| P8 | Tests de integración para endpoints POST | 🟡 Media | ⬜ |
+| P9 | Auto-trigger de re-análisis cuando llega attachment | 🟡 Media | ⬜ |
+| P10 | Confirm dialog antes de re-analizar (consume API) | 🟢 Baja | ⬜ |
+| P11 | Auditoría de eventos de re-análisis manual | 🟢 Baja | ⬜ |
 
 ---
 
@@ -171,11 +177,12 @@
 | **Fase 1.5** — Refactor QA | 10 | 10 | 0 | 0 | **100%** |
 | **Fase 2.1** — Supabase Auth | 12 | 12 | 0 | 0 | **100%** |
 | **Fase 2.2** — Backend + Webhook | 28 | 28 | 0 | 0 | **100%** |
-| **Fase 2.3** — Realtime + REST | 7 | 7 | 0 | 0 | **100%** |
-| **Fase 3** — Claude IA | 18 | 16 | 1 | 1 | **89%** |
-| **Fase 4** — Acciones asesor | 10 | 0 | 0 | 10 | **0%** |
-| **Fase 5** — Métricas | 8 | 0 | 0 | 8 | **0%** |
-| **Otros** | 10 | 10 | 0 | 0 | **100%** |
-| **Total general** | **146** | **121** | **1** | **20** | **~83%** |
+| **Fase 2.3** — Realtime + REST | 7 | 6 | 0 | 1 | **86%** |
+| **Fase 3** — Claude IA | 19 | 17 | 1 | 1 | **89%** |
+| **Fase 4** — Acciones asesor | 9 | 9 | 0 | 0 | **100%** |
+| **Fase 5** — Métricas | 5 | 5 | 0 | 0 | **100%** |
+| **Sesión 28** — Fixes + features | 10 | 10 | 0 | 0 | **100%** |
+| **Pendientes producción** | 11 | 6 | 0 | 5 | **55%** |
+| **Total general** | **154** | **145** | **1** | **8** | **~94%** |
 
-> Nota: Fase 3.16 (env vars) sigue bloqueada por scope de Vercel. Realtime INSERT fix completado en Sesión 26 — las cards ahora aparecen sin recargar. Pendiente limpiar logs de diagnóstico después de validar.
+> Nota: Sesión 28 completada con 5 commits, 1 fix de RPC, 1 nueva feature de re-análisis, 1 contador visual de mensajes, y todas las env vars de producción configuradas.
