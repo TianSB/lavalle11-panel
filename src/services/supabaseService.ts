@@ -25,6 +25,7 @@ import type { CasoService } from "./mockService";
 import { TIPOS_CASO } from "../constants";
 import type { AssignCaseResult } from "./errors";
 import { ErrorCodes, AppError } from "./errors";
+import { enviarMensajeCallbell } from "./callbell/messagesApi.js";
 
 // -----------------------------------------------------------
 // Mapping helpers
@@ -391,11 +392,46 @@ export const supabaseCasoService: CasoService = {
   // ---------------------------------------------------------
   // enviarMensaje
   // ---------------------------------------------------------
-  async enviarMensaje(_casoId: string, _mensaje: string): Promise<void> {
-    // TODO: Fase 4 — integrar Callbell Messages API para enviar el mensaje
-    // y registrar el mensaje outbound en la tabla `mensajes`
-    console.log(
-      "[SUPABASE_SERVICE] enviarMensaje aún no implementado — pendiente Callbell API",
-    );
+  async enviarMensaje(casoId: string, mensaje: string): Promise<void> {
+    console.log("[SUPABASE_SERVICE] enviarMensaje — caso:", casoId);
+
+    try {
+      // 1. Obtener datos del caso para conocer el teléfono y conversation UUID
+      const { data: caso, error } = await supabase
+        .from("casos")
+        .select("id, contact_phone, callbell_conversation_uuid")
+        .eq("id", casoId)
+        .single();
+
+      if (error || !caso) {
+        console.error("[SUPABASE_SERVICE] Caso no encontrado:", casoId, error?.message);
+        throw new Error(`Caso ${casoId} no encontrado`);
+      }
+
+      const phone = caso.contact_phone as string;
+      const conversationUuid = caso.callbell_conversation_uuid as string;
+
+      // 2. Validar que tengamos un número de teléfono
+      if (!phone) {
+        console.error("[SUPABASE_SERVICE] Caso sin teléfono:", casoId);
+        throw new Error(`Caso ${casoId} no tiene número de teléfono`);
+      }
+
+      // 3. Enviar mensaje via Callbell API
+      const result = await enviarMensajeCallbell(phone, mensaje, conversationUuid);
+
+      if (!result.success) {
+        throw new Error(`Error al enviar mensaje: ${result.error}`);
+      }
+
+      console.log(
+        "[SUPABASE_SERVICE] Mensaje enviado OK — caso:", casoId,
+        "messageId:", result.messageId,
+      );
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Error desconocido";
+      console.error("[SUPABASE_SERVICE] Error en enviarMensaje:", errorMessage);
+      throw new Error(`No se pudo enviar el mensaje: ${errorMessage}`);
+    }
   },
 };

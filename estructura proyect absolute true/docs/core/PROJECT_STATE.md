@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-14 (Sesión 25)
-> **Versión:** 2.1 — Fase 3 completa. Tests unitarios (34). Frontend verificado conectado a Supabase. Env vars de IA pendientes de configurar en Vercel scope Production.
+> **Última actualización:** 2026-06-14 (Sesión 26)
+> **Versión:** 2.2 — Realtime INSERT fix. Las cards aparecen sin recargar. Env vars de IA pendientes.
 
 ---
 
@@ -30,12 +30,12 @@
 | **Fase 1.5 — Refactor QA** | ✅ Completada | 100% |
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
 | **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% |
-| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | 100% |
-| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100%** — +34 tests unitarios |
+| **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | **100% — Realtime INSERT fix aplicado** |
+| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100% — +34 tests unitarios** |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production (scope correcto) y hacer Redeploy del último commit. Verificar log: `[AI_FACTORY] Provider activo: claude`.
+**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production (scope correcto) y hacer Redeploy. Verificar log: `[AI_FACTORY] Provider activo: claude`.
 
 ---
 
@@ -91,6 +91,16 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
   → response 200 OK
 ```
 
+### Realtime INSERT/UPDATE pipeline — CORREGIDO (Sesión 26)
+
+```
+Supabase Realtime → INSERT en casos
+  → useCaseRealtimeSync recibe evento
+  → fetchCasoCompleto() ← obtiene extracciones_ia, turnos, llamadas con joins
+  → onNuevoCaso(caso) → addCaso() → setCasos(prev => [nuevoCaso, ...prev])
+  → ✅ Card aparece sin recargar
+```
+
 ### Problemas resueltos — Historial completo
 
 | Problema | Estado | Fix |
@@ -104,6 +114,8 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 | global.fetch override rompía postgrest-js | ✅ Resuelto | Eliminado el override. Env vars correctas. |
 | **error 23505: Caso cerrado bloquea nuevos mensajes** | ✅ **Resuelto** | **RAMA 2: reabrirCaso() + actualizarExtraccionIA()** |
 | **Adjuntos sin content_type** | ✅ **Resuelto** | **CallbellAttachmentPayload + parseAttachment() biforma** |
+| TS6133: vi import no utilizado | ✅ Resuelto | Eliminado de providers.test.ts |
+| **Realtime INSERT no actualiza panel** | ✅ **Resuelto** | **fetchCasoCompleto + onNuevoCaso/addCaso bypassan RECONCILE** |
 
 ### Variables de Entorno en Vercel
 
@@ -128,7 +140,7 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 ```
                     auditoria_eventos (append-only log)
                     ┌──────────────────────────────┐
-                    │ event_source = 'db_trigger'  │ ← Telemetría técnica
+                    │ event_source = 'db_trigger'   │ ← Telemetría técnica
                     │ event_type  = 'casos.snapshot'│
                     │ correlation_id = NULL         │
                     ├──────────────────────────────┤
@@ -222,7 +234,7 @@ getAIProvider()  ← aiFactory.ts (singleton)
 │       └── webhook.ts            # Serverless Function — process-first pattern
 ├── src/
 │   ├── services/
-│   │   ├── __tests__/            # ★ NUEVO — Tests unitarios (Sesión 24-25)
+│   │   ├── __tests__/            # Tests unitarios (34)
 │   │   │   ├── fixtures.ts       #   Fixtures compartidos (8)
 │   │   │   ├── providers.test.ts #   19 tests: MockAIProvider + aiFactory
 │   │   │   └── casoService.test.ts # 15 tests: buildFlags + reabrirCaso + actualizarExtraccionIA
@@ -246,11 +258,13 @@ getAIProvider()  ← aiFactory.ts (singleton)
 │   ├── types/
 │   │   └── index.ts              # Tipos compartidos
 │   ├── hooks/
-│   │   ├── useCasos.ts           # Hook de casos con service layer
-│   │   ├── useCaseRealtimeSync.ts # Suscripción Realtime
+│   │   ├── useCasos.ts           # Hook de casos + addCaso/updateCaso (Realtime)
+│   │   ├── useCaseRealtimeSync.ts # Suscripción Realtime con fetchCasoCompleto
 │   │   └── useAsignarCaso.ts     # Asignación optimista
+│   ├── stores/
+│   │   └── caseUIStore.ts        # UI store (reducer RECONCILE solo para UI state)
 │   ├── context/
-│   │   ├── CaseUIStoreContext.tsx # UI store
+│   │   ├── CaseUIStoreContext.tsx # UI store provider
 │   │   ├── CasoServiceContext.tsx # DI: inyecta supabaseCasoService
 │   │   └── AuthContext.tsx        # Autenticación
 │   ├── components/               # Componentes React
@@ -290,8 +304,9 @@ getAIProvider()  ← aiFactory.ts (singleton)
 1. 🔴 **Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production** (verificar scope)
 2. 🔴 **Hacer Redeploy del último commit** (forzar nueva build que capture env vars)
 3. 🟢 **Verificar log del webhook**: debe mostrar `[AI_FACTORY] Provider activo: claude`
-4. ⬜ Probar webhook con IA real desde WhatsApp
-5. ⬜ Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3
+4. 🟢 Probar webhook con IA real desde WhatsApp
+5. ⬜ Limpiar logs de diagnóstico de Sesión 26 (`[REALTIME]`, `[RECONCILE]`, `[USECASOS]`, `[DASHBOARD]`)
+6. ⬜ Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3
 
 ---
 
@@ -301,5 +316,5 @@ getAIProvider()  ← aiFactory.ts (singleton)
 - **Autor PRD:** RIA · r-ia.vercel.app
 - **Repositorio:** `github.com:TianSB/lavalle11-panel`
 - **Dominio:** `https://l11panel.vercel.app`
-- **Último commit:** `5acf641` — `chore: add tests (vitest), update docs, export buildFlags for Fase 3`
+- **Último commit:** `1c0736b` — `fix(realtime): fetch full caso on INSERT/UPDATE with joins, use callbacks to update useCasos state`
 - **Documentación completa:** Ver `docs/` y archivos maestros en raíz
