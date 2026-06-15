@@ -4,6 +4,7 @@ import type {
   MetricaResumen,
   CasoPorTipo,
   VolumenDiario,
+  MetricaPorAsesor,
 } from "../types";
 import type { AssignCaseResult } from "./errors";
 import {
@@ -24,6 +25,7 @@ export interface CasoService {
   getMetricasResumen(): Promise<MetricaResumen>;
   getCasosPorTipo(): Promise<CasoPorTipo[]>;
   getVolumenDiario(): Promise<VolumenDiario[]>;
+  getMetricasPorAsesor(): Promise<MetricaPorAsesor[]>;
   getUsuarios(): Promise<Usuario[]>;
   /**
    * Asignar un caso al usuario autenticado.
@@ -79,6 +81,12 @@ export const mockCasoService: CasoService = {
   async getVolumenDiario(): Promise<VolumenDiario[]> {
     await delay();
     return [...MOCK_VOLUMEN_DIARIO];
+  },
+
+  async getMetricasPorAsesor(): Promise<MetricaPorAsesor[]> {
+    await delay();
+    const { MOCK_METRICAS_POR_ASESOR } = await import("../data/mockCases");
+    return [...MOCK_METRICAS_POR_ASESOR];
   },
 
   async getUsuarios(): Promise<Usuario[]> {

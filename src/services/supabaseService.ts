@@ -12,6 +12,7 @@ import type {
   MetricaResumen,
   CasoPorTipo,
   VolumenDiario,
+  MetricaPorAsesor,
   TipoCaso,
   EstadoCaso,
   Prioridad,
@@ -336,6 +337,115 @@ export const supabaseCasoService: CasoService = {
       }))
       .sort((a, b) => a.fecha.localeCompare(b.fecha))
       .slice(-30); // Last 30 days
+  },
+
+  // ---------------------------------------------------------
+  // getMetricasPorAsesor
+  // ---------------------------------------------------------
+  async getMetricasPorAsesor(): Promise<MetricaPorAsesor[]> {
+    // Fetch active cases grouped by asesor
+    const { data: activos, error: errActivos } = await supabase
+      .from("casos")
+      .select("asesor_id, asesor:asesor_id (nombre), updated_at")
+      .not("asesor_id", "is", null)
+      .neq("estado", "cerrado");
+
+    if (errActivos) {
+      console.error("[SUPABASE_SERVICE] Error al obtener métricas por asesor (activos):", errActivos.message);
+      return [];
+    }
+
+    // Fetch resolved cases grouped by asesor
+    const { data: cerrados, error: errCerrados } = await supabase
+      .from("casos")
+      .select("asesor_id, resolved_at, created_at")
+      .not("asesor_id", "is", null)
+      .eq("estado", "cerrado");
+
+    if (errCerrados) {
+      console.error("[SUPABASE_SERVICE] Error al obtener métricas por asesor (cerrados):", errCerrados.message);
+      return [];
+    }
+
+    // Aggregate by asesor
+    const asesorMap = new Map<
+      string,
+      {
+        nombre: string;
+        activos: number;
+        resueltos: number;
+        totalTiempoMs: number;
+        casosConTiempo: number;
+        ultimaActividad: string | null;
+      }
+    >();
+
+    for (const row of activos ?? []) {
+      const id = row.asesor_id as string;
+      if (!id) continue;
+      const entry = asesorMap.get(id) ?? {
+        nombre: ((row.asesor as unknown as Record<string, unknown> | null)?.nombre as string) ?? id,
+        activos: 0,
+        resueltos: 0,
+        totalTiempoMs: 0,
+        casosConTiempo: 0,
+        ultimaActividad: null,
+      };
+      entry.activos++;
+      const updated = row.updated_at as string | null;
+      if (updated && (!entry.ultimaActividad || updated > entry.ultimaActividad)) {
+        entry.ultimaActividad = updated;
+      }
+      asesorMap.set(id, entry);
+    }
+
+    for (const row of cerrados ?? []) {
+      const id = row.asesor_id as string;
+      if (!id) continue;
+      const entry = asesorMap.get(id) ?? {
+        nombre: id,
+        activos: 0,
+        resueltos: 0,
+        totalTiempoMs: 0,
+        casosConTiempo: 0,
+        ultimaActividad: null,
+      };
+      entry.resueltos++;
+      if (row.resolved_at && row.created_at) {
+        entry.totalTiempoMs +=
+          new Date(row.resolved_at as string).getTime() -
+          new Date(row.created_at as string).getTime();
+        entry.casosConTiempo++;
+      }
+      const resolved = row.resolved_at as string | null;
+      if (resolved && (!entry.ultimaActividad || resolved > entry.ultimaActividad)) {
+        entry.ultimaActividad = resolved;
+      }
+      asesorMap.set(id, entry);
+    }
+
+    // Map to MetricaPorAsesor[], sorted by casos_activos desc
+    const result: MetricaPorAsesor[] = Array.from(asesorMap.entries()).map(
+      ([id, data]) => {
+        const totalAsignados = data.activos + data.resueltos;
+        return {
+          asesor_id: id,
+          asesor_nombre: data.nombre,
+          casos_activos: data.activos,
+          casos_resueltos: data.resueltos,
+          tiempo_promedio_resolucion_min:
+            data.casosConTiempo > 0
+              ? Math.round(data.totalTiempoMs / data.casosConTiempo / 60000)
+              : 0,
+          tasa_resolucion:
+            totalAsignados > 0 ? data.resueltos / totalAsignados : 0,
+          ultima_actividad: data.ultimaActividad,
+        };
+      },
+    );
+
+    result.sort((a, b) => b.casos_activos - a.casos_activos);
+    return result;
   },
 
   // ---------------------------------------------------------

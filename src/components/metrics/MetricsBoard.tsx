@@ -1,7 +1,7 @@
 import { useMetricas } from "../../hooks/useCasos";
 
 export function MetricsBoard() {
-  const { resumen, porTipo, volumenDiario, isLoading } = useMetricas();
+  const { resumen, porTipo, volumenDiario, porAsesor, isLoading } = useMetricas();
   const maxTipo = Math.max(...porTipo.map((t) => t.cantidad), 1);
   const maxVolumen = Math.max(...volumenDiario.map((v) => v.total), 1);
 
@@ -165,6 +165,71 @@ export function MetricsBoard() {
               </div>
             </div>
           </div>
+
+          {/* Rendimiento por asesor */}
+          {porAsesor.length > 0 && (
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Rendimiento por asesor</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left font-medium text-gray-500 pb-2 pr-4">Asesor</th>
+                      <th className="text-right font-medium text-gray-500 pb-2 px-3">Activos</th>
+                      <th className="text-right font-medium text-gray-500 pb-2 px-3">Resueltos</th>
+                      <th className="text-right font-medium text-gray-500 pb-2 px-3">Tiempo prom.</th>
+                      <th className="text-right font-medium text-gray-500 pb-2 px-3">Resolución</th>
+                      <th className="text-right font-medium text-gray-500 pb-2 pl-3">Última actividad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {porAsesor.map((a) => {
+                      const ultimaAct = a.ultima_actividad
+                        ? new Date(a.ultima_actividad).toLocaleDateString("es-AR", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—";
+                      return (
+                        <tr key={a.asesor_id} className="border-b border-gray-50 last:border-0">
+                          <td className="py-3 pr-4">
+                            <span className="font-medium text-gray-900">{a.asesor_nombre}</span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="font-semibold text-gray-800">{a.casos_activos}</span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="font-semibold text-gray-800">{a.casos_resueltos}</span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span className="text-gray-600">{a.tiempo_promedio_resolucion_min}m</span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                a.tasa_resolucion >= 0.8
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : a.tasa_resolucion >= 0.5
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-red-50 text-red-700"
+                              }`}
+                            >
+                              {Math.round(a.tasa_resolucion * 100)}%
+                            </span>
+                          </td>
+                          <td className="py-3 pl-3 text-right">
+                            <span className="text-xs text-gray-500">{ultimaAct}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { Caso, Usuario, MetricaResumen, CasoPorTipo, VolumenDiario, type TipoCaso } from "../types";
+import { Caso, Usuario, MetricaResumen, CasoPorTipo, VolumenDiario, MetricaPorAsesor, type TipoCaso } from "../types";
 
 export const USUARIO_ACTUAL: Usuario = {
   id: "u-001",
@@ -577,6 +577,27 @@ export const MOCK_VOLUMEN_DIARIO: VolumenDiario[] = [
   { fecha: "2026-06-07", total: 20, resueltos: 18, automaticos: 3 },
   { fecha: "2026-06-08", total: 25, resueltos: 22, automaticos: 5 },
   { fecha: "2026-06-09", total: 12, resueltos: 5, automaticos: 1 },
+];
+
+export const MOCK_METRICAS_POR_ASESOR: MetricaPorAsesor[] = [
+  {
+    asesor_id: "u-001",
+    asesor_nombre: "Brenda Gandolfi",
+    casos_activos: 3,
+    casos_resueltos: 15,
+    tiempo_promedio_resolucion_min: 28,
+    tasa_resolucion: 0.83,
+    ultima_actividad: "2026-06-09T10:30:00Z",
+  },
+  {
+    asesor_id: "u-admin",
+    asesor_nombre: "Franco Berardi",
+    casos_activos: 1,
+    casos_resueltos: 8,
+    tiempo_promedio_resolucion_min: 35,
+    tasa_resolucion: 0.89,
+    ultima_actividad: "2026-06-09T09:00:00Z",
+  },
 ];
 
 export const TIPOS_CASO: Record<TipoCaso, string> = {

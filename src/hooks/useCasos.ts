@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario } from "../types";
+import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario, MetricaPorAsesor } from "../types";
 import { useCasoService } from "../context/CasoServiceContext";
 
 export interface UseCasosReturn {
@@ -112,6 +112,7 @@ interface UseMetricasReturn {
   resumen: MetricaResumen | null;
   porTipo: CasoPorTipo[];
   volumenDiario: VolumenDiario[];
+  porAsesor: MetricaPorAsesor[];
   isLoading: boolean;
 }
 
@@ -125,19 +126,22 @@ export function useMetricas(): UseMetricasReturn {
   const [resumen, setResumen] = useState<MetricaResumen | null>(null);
   const [porTipo, setPorTipo] = useState<CasoPorTipo[]>([]);
   const [volumenDiario, setVolumenDiario] = useState<VolumenDiario[]>([]);
+  const [porAsesor, setPorAsesor] = useState<MetricaPorAsesor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchMetrics = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [res, tipos, volumen] = await Promise.all([
+      const [res, tipos, volumen, asesores] = await Promise.all([
         service.getMetricasResumen(),
         service.getCasosPorTipo(),
         service.getVolumenDiario(),
+        service.getMetricasPorAsesor(),
       ]);
       setResumen(res);
       setPorTipo(tipos);
       setVolumenDiario(volumen);
+      setPorAsesor(asesores);
     } catch (err) {
       console.error("[USEMETRICAS] Error fetching metrics:", err);
     } finally {
@@ -149,5 +153,5 @@ export function useMetricas(): UseMetricasReturn {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  return { resumen, porTipo, volumenDiario, isLoading };
+  return { resumen, porTipo, volumenDiario, porAsesor, isLoading };
 }

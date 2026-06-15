@@ -159,3 +159,18 @@ export interface VolumenDiario {
   resueltos: number;
   automaticos: number;
 }
+
+export interface MetricaPorAsesor {
+  asesor_id: string;
+  asesor_nombre: string;
+  /** Casos activos (no cerrados) asignados al asesor */
+  casos_activos: number;
+  /** Total de casos resueltos (cerrados) por el asesor */
+  casos_resueltos: number;
+  /** Tiempo promedio de resolución en minutos */
+  tiempo_promedio_resolucion_min: number;
+  /** Proporción de casos resueltos vs total asignado */
+  tasa_resolucion: number;
+  /** Última actividad (fecha ISO) */
+  ultima_actividad: string | null;
+}
