@@ -30,6 +30,8 @@ export function DashboardPage() {
   const { reconcileCaseState } = useCaseUIStoreContext();
   const userId = user?.id;
 
+  console.log("[DASHBOARD] render — userId:", userId, "user:", user?.id);
+
   // Suscripción Realtime a cambios en la tabla casos
   // Pasa refresh() para resync automático en reconnect + visibility change
   useCaseRealtimeSync(refresh);
