@@ -225,6 +225,9 @@ export function DashboardPage() {
             caso={selectedCaso}
             isOpen={isModalOpen}
             onClose={handleCloseModal}
+            userId={userId}
+            onCasoAsignar={handleAsignarCaso}
+            onRefresh={refresh}
           />
         </>
       )}
