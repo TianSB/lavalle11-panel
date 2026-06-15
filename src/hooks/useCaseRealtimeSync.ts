@@ -209,6 +209,7 @@ function mapRowToCaso(row: Record<string, unknown>): Caso {
         } as ExtraccionIA),
     turnos: (row.turnos as Turno[]) ?? [],
     llamadas: (row.llamadas as Llamada[]) ?? [],
+    mensajes_count: 0,
   };
 }
 

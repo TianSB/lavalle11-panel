@@ -57,6 +57,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 3,
   },
 
   // LV-0042 — Tipo A: Turno con orden (en proceso)
@@ -99,6 +100,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 5,
   },
 
   // LV-0043 — Tipo B: Estudio sin turno (automático)
@@ -141,6 +143,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 1,
   },
 
   // LV-0044 — Tipo C: Consulta de precios
@@ -183,6 +186,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 2,
   },
 
   // LV-0045 — Tipo D: Caso con copago
@@ -225,6 +229,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 4,
   },
 
   // LV-0046 — Tipo E: Derivación a Chiclana
@@ -267,6 +272,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 1,
   },
 
   // LV-0047 — Tipo F: Consulta de resultados
@@ -309,6 +315,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 7,
   },
 
   // LV-0048 — Tipo G: Médico derivante
@@ -351,6 +358,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 6,
   },
 
   // LV-0049 — Tipo H: Punción - presupuesto
@@ -393,6 +401,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 3,
   },
 
   // LV-0050 — Tipo I: Reprogramación
@@ -447,6 +456,7 @@ export const MOCK_CASOS: Caso[] = [
       },
     ],
     llamadas: [],
+    mensajes_count: 3,
   },
 
   // LV-0051 — Tipo J: Cancelación
@@ -501,6 +511,7 @@ export const MOCK_CASOS: Caso[] = [
       },
     ],
     llamadas: [],
+    mensajes_count: 2,
   },
 
   // LV-0052 — Tipo K: Contacto equivocado
@@ -543,6 +554,7 @@ export const MOCK_CASOS: Caso[] = [
     },
     turnos: [],
     llamadas: [],
+    mensajes_count: 1,
   },
 ];
 

@@ -128,6 +128,8 @@ export interface Caso {
   extraccion_ia: ExtraccionIA;
   turnos: Turno[];
   llamadas: Llamada[];
+  /** Cantidad de mensajes entrantes acumulados en la conversación */
+  mensajes_count: number;
 }
 
 export interface Usuario {

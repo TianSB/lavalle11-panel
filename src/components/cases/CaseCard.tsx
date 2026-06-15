@@ -146,6 +146,18 @@ export function CaseCard({ caso, onClick, onAsignar }: CaseCardProps) {
             <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 font-mono">
               {caso.id}
             </span>
+            {/* Message count badge */}
+            {caso.mensajes_count > 1 && (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600"
+                title={`${caso.mensajes_count} mensajes en la conversación`}
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {caso.mensajes_count}
+              </span>
+            )}
             <Badge color="purple" size="sm">{`Tipo ${caso.tipo_caso}`}</Badge>
             {caso.extraccion_ia.tipo_practica !== "otro" && (
               <span className="hidden sm:inline text-xs text-gray-500 capitalize">

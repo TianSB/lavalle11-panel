@@ -100,6 +100,7 @@ function mapRowToCaso(row: Record<string, unknown>): Caso {
         } as ExtraccionIA),
     turnos: (row.turnos as Turno[]) ?? [],
     llamadas: (row.llamadas as Llamada[]) ?? [],
+    mensajes_count: 0, // Se reemplaza después con fetchMensajesCounts
   };
 }
 
@@ -114,6 +115,32 @@ const CASOS_SELECT = `
   llamadas (*),
   asesor:asesor_id (nombre)
 ` as const;
+
+/**
+ * Para un set de caso_ids, obtiene el conteo de mensajes entrantes por caso.
+ * Retorna un Map<caso_id, count>.
+ */
+async function fetchMensajesCounts(casoIds: string[]): Promise<Map<string, number>> {
+  if (casoIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("mensajes")
+    .select("caso_id")
+    .in("caso_id", casoIds)
+    .eq("direction", "inbound");
+
+  if (error) {
+    console.warn("[SUPABASE_SERVICE] Error al obtener conteo de mensajes:", error.message);
+    return new Map();
+  }
+
+  const countMap = new Map<string, number>();
+  for (const row of data ?? []) {
+    const cid = row.caso_id as string;
+    countMap.set(cid, (countMap.get(cid) ?? 0) + 1);
+  }
+  return countMap;
+}
 
 // -----------------------------------------------------------
 // Service implementation
@@ -134,7 +161,16 @@ export const supabaseCasoService: CasoService = {
       return [];
     }
 
-    return (data ?? []).map(mapRowToCaso);
+    const casos = (data ?? []).map(mapRowToCaso);
+
+    // Batch fetch message counts for all casos
+    const casoIds = casos.map((c) => c.id);
+    const countsMap = await fetchMensajesCounts(casoIds);
+    for (const caso of casos) {
+      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+    }
+
+    return casos;
   },
 
   // ---------------------------------------------------------
@@ -152,7 +188,15 @@ export const supabaseCasoService: CasoService = {
       return [];
     }
 
-    return (data ?? []).map(mapRowToCaso);
+    const casos = (data ?? []).map(mapRowToCaso);
+
+    const casoIds = casos.map((c) => c.id);
+    const countsMap = await fetchMensajesCounts(casoIds);
+    for (const caso of casos) {
+      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+    }
+
+    return casos;
   },
 
   // ---------------------------------------------------------
@@ -186,7 +230,15 @@ export const supabaseCasoService: CasoService = {
       return [];
     }
 
-    return (data ?? []).map(mapRowToCaso);
+    const casos = (data ?? []).map(mapRowToCaso);
+
+    const ids = casos.map((c) => c.id);
+    const countsMap = await fetchMensajesCounts(ids);
+    for (const caso of casos) {
+      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+    }
+
+    return casos;
   },
 
   // ---------------------------------------------------------
