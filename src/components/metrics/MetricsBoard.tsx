@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMetricas } from "../../hooks/useCasos";
 
 /**
@@ -88,8 +88,23 @@ function downloadMetricsCSV({
 
 const POLL_INTERVAL_MS = 60_000;
 
+/** Default: last 30 days */
+function defaultFechaDesde(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
+function defaultFechaHasta(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function MetricsBoard() {
-  const { resumen, porTipo, volumenDiario, porAsesor, isLoading, refresh } = useMetricas();
+  const [fechaDesde, setFechaDesde] = useState(defaultFechaDesde);
+  const [fechaHasta, setFechaHasta] = useState(defaultFechaHasta);
+
+  const { resumen, porTipo, volumenDiario, porAsesor, isLoading, refresh } =
+    useMetricas(fechaDesde, fechaHasta);
   const maxTipo = Math.max(...porTipo.map((t) => t.cantidad), 1);
   const maxVolumen = Math.max(...volumenDiario.map((v) => v.total), 1);
 
@@ -108,18 +123,39 @@ export function MetricsBoard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Dashboard de Métricas</h2>
-        <button
-          onClick={handleExportCSV}
-          disabled={!resumen}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Exportar CSV
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Date range filter */}
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Desde</label>
+            <input
+              type="date"
+              value={fechaDesde}
+              onChange={(e) => setFechaDesde(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 shadow-sm transition-all hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Hasta</label>
+            <input
+              type="date"
+              value={fechaHasta}
+              onChange={(e) => setFechaHasta(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700 shadow-sm transition-all hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            onClick={handleExportCSV}
+            disabled={!resumen}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Exportar CSV
+          </button>
+        </div>
       </div>
 
       {/* Loading state */}

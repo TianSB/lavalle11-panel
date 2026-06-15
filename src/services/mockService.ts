@@ -22,10 +22,10 @@ export interface CasoService {
   getCasos(): Promise<Caso[]>;
   getCasosByAsesor(asesorId: string): Promise<Caso[]>;
   getCasosConSeguimiento(): Promise<Caso[]>;
-  getMetricasResumen(): Promise<MetricaResumen>;
-  getCasosPorTipo(): Promise<CasoPorTipo[]>;
-  getVolumenDiario(): Promise<VolumenDiario[]>;
-  getMetricasPorAsesor(): Promise<MetricaPorAsesor[]>;
+  getMetricasResumen(fecha_desde?: string, fecha_hasta?: string): Promise<MetricaResumen>;
+  getCasosPorTipo(fecha_desde?: string, fecha_hasta?: string): Promise<CasoPorTipo[]>;
+  getVolumenDiario(fecha_desde?: string, fecha_hasta?: string): Promise<VolumenDiario[]>;
+  getMetricasPorAsesor(fecha_desde?: string, fecha_hasta?: string): Promise<MetricaPorAsesor[]>;
   getUsuarios(): Promise<Usuario[]>;
   /**
    * Asignar un caso al usuario autenticado.
@@ -68,22 +68,22 @@ export const mockCasoService: CasoService = {
     );
   },
 
-  async getMetricasResumen(): Promise<MetricaResumen> {
+  async getMetricasResumen(_fecha_desde?: string, _fecha_hasta?: string): Promise<MetricaResumen> {
     await delay();
     return { ...MOCK_METRICAS };
   },
 
-  async getCasosPorTipo(): Promise<CasoPorTipo[]> {
+  async getCasosPorTipo(_fecha_desde?: string, _fecha_hasta?: string): Promise<CasoPorTipo[]> {
     await delay();
     return [...MOCK_CASOS_POR_TIPO];
   },
 
-  async getVolumenDiario(): Promise<VolumenDiario[]> {
+  async getVolumenDiario(_fecha_desde?: string, _fecha_hasta?: string): Promise<VolumenDiario[]> {
     await delay();
     return [...MOCK_VOLUMEN_DIARIO];
   },
 
-  async getMetricasPorAsesor(): Promise<MetricaPorAsesor[]> {
+  async getMetricasPorAsesor(_fecha_desde?: string, _fecha_hasta?: string): Promise<MetricaPorAsesor[]> {
     await delay();
     const { MOCK_METRICAS_POR_ASESOR } = await import("../data/mockCases");
     return [...MOCK_METRICAS_POR_ASESOR];

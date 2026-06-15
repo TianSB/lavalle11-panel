@@ -192,13 +192,55 @@ export const supabaseCasoService: CasoService = {
   // ---------------------------------------------------------
   // getMetricasResumen
   // ---------------------------------------------------------
-  async getMetricasResumen(): Promise<MetricaResumen> {
+  async getMetricasResumen(fecha_desde?: string, fecha_hasta?: string): Promise<MetricaResumen> {
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(
       Date.now() - 24 * 60 * 60 * 1000,
     ).toISOString();
 
-    // Run count queries + fetch cerrados for avg resolution time in parallel
+    // Build — casos activos (no cerrados)
+    let qActivos = supabase
+      .from("casos")
+      .select("*", { count: "exact", head: true })
+      .neq("estado", "cerrado");
+    if (fecha_desde) qActivos = qActivos.gte("created_at", fecha_desde);
+    if (fecha_hasta) qActivos = qActivos.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Build — casos creados hoy
+    let qHoy = supabase
+      .from("casos")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", today);
+    if (fecha_desde) qHoy = qHoy.gte("created_at", fecha_desde);
+    if (fecha_hasta) qHoy = qHoy.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Build — casos sin asignar activos
+    let qSinAsignar = supabase
+      .from("casos")
+      .select("*", { count: "exact", head: true })
+      .is("asesor_id", null)
+      .neq("estado", "cerrado");
+    if (fecha_desde) qSinAsignar = qSinAsignar.gte("created_at", fecha_desde);
+    if (fecha_hasta) qSinAsignar = qSinAsignar.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Build — casos sin atender 24hs
+    let qAntiguos = supabase
+      .from("casos")
+      .select("*", { count: "exact", head: true })
+      .neq("estado", "cerrado")
+      .lt("created_at", yesterday);
+    if (fecha_desde) qAntiguos = qAntiguos.gte("created_at", fecha_desde);
+    if (fecha_hasta) qAntiguos = qAntiguos.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Build — casos cerrados (para promedios)
+    let qCerrados = supabase
+      .from("casos")
+      .select("resolved_at, created_at, tipo_caso")
+      .eq("estado", "cerrado");
+    if (fecha_desde) qCerrados = qCerrados.gte("created_at", fecha_desde);
+    if (fecha_hasta) qCerrados = qCerrados.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Run all queries in parallel
     const [
       { count: casosActivos },
       { count: casosHoy },
@@ -206,28 +248,11 @@ export const supabaseCasoService: CasoService = {
       { count: casosAntiguos },
       { data: casosCerrados },
     ] = await Promise.all([
-      supabase
-        .from("casos")
-        .select("*", { count: "exact", head: true })
-        .neq("estado", "cerrado"),
-      supabase
-        .from("casos")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", today),
-      supabase
-        .from("casos")
-        .select("*", { count: "exact", head: true })
-        .is("asesor_id", null)
-        .neq("estado", "cerrado"),
-      supabase
-        .from("casos")
-        .select("*", { count: "exact", head: true })
-        .neq("estado", "cerrado")
-        .lt("created_at", yesterday),
-      supabase
-        .from("casos")
-        .select("resolved_at, created_at, tipo_caso")
-        .eq("estado", "cerrado"),
+      qActivos,
+      qHoy,
+      qSinAsignar,
+      qAntiguos,
+      qCerrados,
     ]);
 
     let totalTiempoMs = 0;
@@ -265,11 +290,13 @@ export const supabaseCasoService: CasoService = {
   // ---------------------------------------------------------
   // getCasosPorTipo
   // ---------------------------------------------------------
-  async getCasosPorTipo(): Promise<CasoPorTipo[]> {
-    // Fetch all tipo_caso values and count in JS
-    const { data, error } = await supabase
-      .from("casos")
-      .select("tipo_caso");
+  async getCasosPorTipo(fecha_desde?: string, fecha_hasta?: string): Promise<CasoPorTipo[]> {
+    // Build query with optional date filter
+    let query = supabase.from("casos").select("tipo_caso");
+    if (fecha_desde) query = query.gte("created_at", fecha_desde);
+    if (fecha_hasta) query = query.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    const { data, error } = await query;
 
     if (error || !data) {
       console.error("[SUPABASE_SERVICE] Error al obtener casos por tipo:", error?.message);
@@ -298,12 +325,16 @@ export const supabaseCasoService: CasoService = {
   // ---------------------------------------------------------
   // getVolumenDiario
   // ---------------------------------------------------------
-  async getVolumenDiario(): Promise<VolumenDiario[]> {
-    // Fetch casos with created_at and estado to compute daily volume
-    const { data, error } = await supabase
+  async getVolumenDiario(fecha_desde?: string, fecha_hasta?: string): Promise<VolumenDiario[]> {
+    // Build query with optional date filter
+    let query = supabase
       .from("casos")
       .select("created_at, estado, tipo_caso")
       .order("created_at", { ascending: false });
+    if (fecha_desde) query = query.gte("created_at", fecha_desde);
+    if (fecha_hasta) query = query.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    const { data, error } = await query;
 
     if (error || !data) {
       console.error("[SUPABASE_SERVICE] Error al obtener volumen diario:", error?.message);
@@ -342,25 +373,33 @@ export const supabaseCasoService: CasoService = {
   // ---------------------------------------------------------
   // getMetricasPorAsesor
   // ---------------------------------------------------------
-  async getMetricasPorAsesor(): Promise<MetricaPorAsesor[]> {
-    // Fetch active cases grouped by asesor
-    const { data: activos, error: errActivos } = await supabase
+  async getMetricasPorAsesor(fecha_desde?: string, fecha_hasta?: string): Promise<MetricaPorAsesor[]> {
+    // Build — casos activos por asesor
+    let qActivos = supabase
       .from("casos")
       .select("asesor_id, asesor:asesor_id (nombre), updated_at")
       .not("asesor_id", "is", null)
       .neq("estado", "cerrado");
+    if (fecha_desde) qActivos = qActivos.gte("created_at", fecha_desde);
+    if (fecha_hasta) qActivos = qActivos.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Build — casos cerrados por asesor
+    let qCerrados = supabase
+      .from("casos")
+      .select("asesor_id, resolved_at, created_at")
+      .not("asesor_id", "is", null)
+      .eq("estado", "cerrado");
+    if (fecha_desde) qCerrados = qCerrados.gte("created_at", fecha_desde);
+    if (fecha_hasta) qCerrados = qCerrados.lte("created_at", fecha_hasta + "T23:59:59Z");
+
+    // Fetch both in parallel
+    const [{ data: activos, error: errActivos }, { data: cerrados, error: errCerrados }] =
+      await Promise.all([qActivos, qCerrados]);
 
     if (errActivos) {
       console.error("[SUPABASE_SERVICE] Error al obtener métricas por asesor (activos):", errActivos.message);
       return [];
     }
-
-    // Fetch resolved cases grouped by asesor
-    const { data: cerrados, error: errCerrados } = await supabase
-      .from("casos")
-      .select("asesor_id, resolved_at, created_at")
-      .not("asesor_id", "is", null)
-      .eq("estado", "cerrado");
 
     if (errCerrados) {
       console.error("[SUPABASE_SERVICE] Error al obtener métricas por asesor (cerrados):", errCerrados.message);

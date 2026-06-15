@@ -119,11 +119,13 @@ interface UseMetricasReturn {
 }
 
 /**
- * Hook that fetches metrics directly from the service layer using dedicated
- * Supabase aggregation queries (count, group by, etc.) instead of deriving
- * from the full casos array. More efficient for large datasets.
+ * Hook that fetches metrics with optional date range filter.
+ * When fecha_desde/fecha_hasta change, metrics are re-fetched automatically.
  */
-export function useMetricas(): UseMetricasReturn {
+export function useMetricas(
+  fecha_desde?: string,
+  fecha_hasta?: string,
+): UseMetricasReturn {
   const service = useCasoService();
   const [resumen, setResumen] = useState<MetricaResumen | null>(null);
   const [porTipo, setPorTipo] = useState<CasoPorTipo[]>([]);
@@ -135,10 +137,10 @@ export function useMetricas(): UseMetricasReturn {
     setIsLoading(true);
     try {
       const [res, tipos, volumen, asesores] = await Promise.all([
-        service.getMetricasResumen(),
-        service.getCasosPorTipo(),
-        service.getVolumenDiario(),
-        service.getMetricasPorAsesor(),
+        service.getMetricasResumen(fecha_desde, fecha_hasta),
+        service.getCasosPorTipo(fecha_desde, fecha_hasta),
+        service.getVolumenDiario(fecha_desde, fecha_hasta),
+        service.getMetricasPorAsesor(fecha_desde, fecha_hasta),
       ]);
       setResumen(res);
       setPorTipo(tipos);
@@ -149,11 +151,18 @@ export function useMetricas(): UseMetricasReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [service]);
+  }, [service, fecha_desde, fecha_hasta]);
 
   useEffect(() => {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  return { resumen, porTipo, volumenDiario, porAsesor, isLoading, refresh: fetchMetrics };
+  return {
+    resumen,
+    porTipo,
+    volumenDiario,
+    porAsesor,
+    isLoading,
+    refresh: fetchMetrics,
+  };
 }
