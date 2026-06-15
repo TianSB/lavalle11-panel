@@ -19,7 +19,6 @@
 //   { ok: false, error: string }
 // ============================================================
 
-import crypto from "node:crypto";
 import { getSupabaseAdmin } from "../../_lib/supabaseAdmin.js";
 import { getAIProvider } from "../../../src/services/ai/aiFactory.js";
 import type { EntradaCanónica, RespuestaCanónica, AdjuntoCanónico } from "../../../src/services/ai/types.js";
