@@ -30,14 +30,14 @@
 --   // data = { ok: true, code: "SUCCESS", case_id: "..." }
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION public.assign_case(p_case_id UUID)
+CREATE OR REPLACE FUNCTION public.assign_case(p_case_id VARCHAR(10))
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY INVOKER  -- <-- CRÍTICO: respeta RLS del usuario autenticado
 SET search_path = public
 AS $$
 DECLARE
-    v_assigned_id UUID;
+    v_assigned_id VARCHAR(10);
 BEGIN
     -- UPDATE atómico: solo afecta si cumple TODAS las condiciones
     UPDATE public.casos
@@ -72,4 +72,4 @@ $$;
 -- RLS dentro de la función valida el rol vía auth_rol()
 -- ============================================================
 REVOKE ALL ON FUNCTION public.assign_case(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.assign_case(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.assign_case(VARCHAR) TO authenticated;
