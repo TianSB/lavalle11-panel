@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useMetricas } from "../../hooks/useCasos";
 
 /**
@@ -86,10 +86,20 @@ function downloadMetricsCSV({
   URL.revokeObjectURL(url);
 }
 
+const POLL_INTERVAL_MS = 60_000;
+
 export function MetricsBoard() {
-  const { resumen, porTipo, volumenDiario, porAsesor, isLoading } = useMetricas();
+  const { resumen, porTipo, volumenDiario, porAsesor, isLoading, refresh } = useMetricas();
   const maxTipo = Math.max(...porTipo.map((t) => t.cantidad), 1);
   const maxVolumen = Math.max(...volumenDiario.map((v) => v.total), 1);
+
+  // Auto-refresh cada 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refresh();
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const handleExportCSV = useCallback(() => {
     if (!resumen) return;

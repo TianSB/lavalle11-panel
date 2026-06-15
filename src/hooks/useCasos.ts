@@ -114,6 +114,8 @@ interface UseMetricasReturn {
   volumenDiario: VolumenDiario[];
   porAsesor: MetricaPorAsesor[];
   isLoading: boolean;
+  /** Re-fetch all metrics from the server */
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -153,5 +155,5 @@ export function useMetricas(): UseMetricasReturn {
     fetchMetrics();
   }, [fetchMetrics]);
 
-  return { resumen, porTipo, volumenDiario, porAsesor, isLoading };
+  return { resumen, porTipo, volumenDiario, porAsesor, isLoading, refresh: fetchMetrics };
 }
