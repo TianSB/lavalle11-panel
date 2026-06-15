@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario, TipoCaso } from "../types";
-import { TIPOS_CASO } from "../constants";
+import { useState, useEffect, useCallback } from "react";
+import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario } from "../types";
 import { useCasoService } from "../context/CasoServiceContext";
 
 export interface UseCasosReturn {
@@ -117,120 +116,38 @@ interface UseMetricasReturn {
 }
 
 /**
- * Hook that derives all metrics from the casos already loaded by useCasos().
- * Uses useMemo for performance — no extra network calls.
- * The aggregation logic mirrors what SupabaseCasoService does server-side,
- * but runs client-side on already-fetched data for efficiency.
+ * Hook that fetches metrics directly from the service layer using dedicated
+ * Supabase aggregation queries (count, group by, etc.) instead of deriving
+ * from the full casos array. More efficient for large datasets.
  */
 export function useMetricas(): UseMetricasReturn {
-  const { casos, isLoading } = useCasos();
+  const service = useCasoService();
+  const [resumen, setResumen] = useState<MetricaResumen | null>(null);
+  const [porTipo, setPorTipo] = useState<CasoPorTipo[]>([]);
+  const [volumenDiario, setVolumenDiario] = useState<VolumenDiario[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const resumen = useMemo<MetricaResumen | null>(() => {
-    if (casos.length === 0) return null;
-
-    const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const yesterday = new Date(
-      now.getTime() - 24 * 60 * 60 * 1000,
-    ).toISOString();
-
-    let casosActivos = 0;
-    let casosHoy = 0;
-    let casosSinAsignar = 0;
-    let casosSinAtender24hs = 0;
-    let totalResueltos = 0;
-    let totalAutomaticos = 0;
-    let totalTiempoResolucionMs = 0;
-    let casosConTiempo = 0;
-
-    for (const c of casos) {
-      const noCerrado = c.estado !== "cerrado";
-
-      if (noCerrado) {
-        casosActivos++;
-        if (c.asesor_id === null) casosSinAsignar++;
-        if (c.created_at < yesterday) casosSinAtender24hs++;
-      }
-
-      if (c.created_at.slice(0, 10) === today) {
-        casosHoy++;
-      }
-
-      if (c.estado === "cerrado") {
-        totalResueltos++;
-        if (c.tipo_caso === "B" || c.tipo_caso === "K") {
-          totalAutomaticos++;
-        }
-        if (c.resolved_at && c.created_at) {
-          totalTiempoResolucionMs +=
-            new Date(c.resolved_at).getTime() -
-            new Date(c.created_at).getTime();
-          casosConTiempo++;
-        }
-      }
+  const fetchMetrics = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [res, tipos, volumen] = await Promise.all([
+        service.getMetricasResumen(),
+        service.getCasosPorTipo(),
+        service.getVolumenDiario(),
+      ]);
+      setResumen(res);
+      setPorTipo(tipos);
+      setVolumenDiario(volumen);
+    } catch (err) {
+      console.error("[USEMETRICAS] Error fetching metrics:", err);
+    } finally {
+      setIsLoading(false);
     }
+  }, [service]);
 
-    return {
-      casos_activos: casosActivos,
-      casos_hoy: casosHoy,
-      casos_sin_asignar: casosSinAsignar,
-      casos_sin_atender_24hs: casosSinAtender24hs,
-      tiempo_promedio_resolucion_min:
-        casosConTiempo > 0
-          ? Math.round(totalTiempoResolucionMs / casosConTiempo / 60000)
-          : 0,
-      tasa_resolucion_automatica:
-        totalResueltos > 0 ? totalAutomaticos / totalResueltos : 0,
-    };
-  }, [casos]);
-
-  const porTipo = useMemo<CasoPorTipo[]>(() => {
-    const counts = new Map<string, number>();
-    for (const c of casos) {
-      counts.set(c.tipo_caso, (counts.get(c.tipo_caso) ?? 0) + 1);
-    }
-
-    const tipoOrder: TipoCaso[] = [
-      "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    ];
-
-    return tipoOrder
-      .filter((t) => counts.has(t))
-      .map((tipo) => ({
-        tipo,
-        nombre: TIPOS_CASO[tipo],
-        cantidad: counts.get(tipo) ?? 0,
-      }));
-  }, [casos]);
-
-  const volumenDiario = useMemo<VolumenDiario[]>(() => {
-    const daily = new Map<
-      string,
-      { total: number; resueltos: number; automaticos: number }
-    >();
-
-    for (const c of casos) {
-      const date = c.created_at.slice(0, 10);
-      const entry = daily.get(date) ?? {
-        total: 0,
-        resueltos: 0,
-        automaticos: 0,
-      };
-      entry.total++;
-      if (c.estado === "cerrado") {
-        entry.resueltos++;
-        if (c.tipo_caso === "B" || c.tipo_caso === "K") {
-          entry.automaticos++;
-        }
-      }
-      daily.set(date, entry);
-    }
-
-    return Array.from(daily.entries())
-      .map(([fecha, vals]) => ({ fecha, ...vals }))
-      .sort((a, b) => a.fecha.localeCompare(b.fecha))
-      .slice(-30);
-  }, [casos]);
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   return { resumen, porTipo, volumenDiario, isLoading };
 }

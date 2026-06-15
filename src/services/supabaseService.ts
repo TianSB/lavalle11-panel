@@ -192,13 +192,18 @@ export const supabaseCasoService: CasoService = {
   // getMetricasResumen
   // ---------------------------------------------------------
   async getMetricasResumen(): Promise<MetricaResumen> {
-    // Run all count queries in parallel
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(
+      Date.now() - 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    // Run count queries + fetch cerrados for avg resolution time in parallel
     const [
       { count: casosActivos },
       { count: casosHoy },
       { count: casosSinAsignar },
       { count: casosAntiguos },
-      { count: casosCerrados },
+      { data: casosCerrados },
     ] = await Promise.all([
       supabase
         .from("casos")
@@ -207,7 +212,7 @@ export const supabaseCasoService: CasoService = {
       supabase
         .from("casos")
         .select("*", { count: "exact", head: true })
-        .gte("created_at", new Date().toISOString().slice(0, 10)),
+        .gte("created_at", today),
       supabase
         .from("casos")
         .select("*", { count: "exact", head: true })
@@ -217,23 +222,42 @@ export const supabaseCasoService: CasoService = {
         .from("casos")
         .select("*", { count: "exact", head: true })
         .neq("estado", "cerrado")
-        .lt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+        .lt("created_at", yesterday),
       supabase
         .from("casos")
-        .select("*", { count: "exact", head: true })
+        .select("resolved_at, created_at, tipo_caso")
         .eq("estado", "cerrado"),
     ]);
 
-    const totalCerrados = casosCerrados ?? 0;
-    const totalCasos = (casosActivos ?? 0) + totalCerrados;
+    let totalTiempoMs = 0;
+    let casosConTiempo = 0;
+    let totalAutomaticos = 0;
+
+    for (const row of casosCerrados ?? []) {
+      const r = row as { resolved_at: string | null; created_at: string; tipo_caso: string };
+      if (r.tipo_caso === "B" || r.tipo_caso === "K") {
+        totalAutomaticos++;
+      }
+      if (r.resolved_at && r.created_at) {
+        totalTiempoMs +=
+          new Date(r.resolved_at).getTime() - new Date(r.created_at).getTime();
+        casosConTiempo++;
+      }
+    }
+
+    const totalCerrados = (casosCerrados ?? []).length;
 
     return {
       casos_activos: casosActivos ?? 0,
       casos_hoy: casosHoy ?? 0,
       casos_sin_asignar: casosSinAsignar ?? 0,
       casos_sin_atender_24hs: casosAntiguos ?? 0,
-      tiempo_promedio_resolucion_min: 0, // TODO: calcular con datos reales cuando haya casos cerrados
-      tasa_resolucion_automatica: totalCasos > 0 ? totalCerrados / totalCasos : 0,
+      tiempo_promedio_resolucion_min:
+        casosConTiempo > 0
+          ? Math.round(totalTiempoMs / casosConTiempo / 60000)
+          : 0,
+      tasa_resolucion_automatica:
+        totalCerrados > 0 ? totalAutomaticos / totalCerrados : 0,
     };
   },
 
