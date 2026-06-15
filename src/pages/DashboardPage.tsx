@@ -25,7 +25,7 @@ export function DashboardPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoCaso | "todas">("todas");
   const [selectedCaso, setSelectedCaso] = useState<Caso | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { casos: allCasos, isLoading, error, refresh } = useCasos();
+  const { casos: allCasos, isLoading, error, refresh, addCaso, updateCaso } = useCasos();
   const { asignar: asignarCaso } = useAsignarCaso();
   const { reconcileCaseState } = useCaseUIStoreContext();
   const userId = user?.id;
@@ -33,8 +33,10 @@ export function DashboardPage() {
   console.log("[DASHBOARD] render — userId:", userId, "user:", user?.id);
 
   // Suscripción Realtime a cambios en la tabla casos
+  // INSERT → fetch caso completo con joins + addCaso() al tope del array
+  // UPDATE → fetch caso completo + updateCaso() en el array + reconcileCaseState
   // Pasa refresh() para resync automático en reconnect + visibility change
-  useCaseRealtimeSync(refresh);
+  useCaseRealtimeSync(refresh, addCaso, updateCaso);
 
   // Sincronización multi-tab vía BroadcastChannel
   // Evita inconsistencias UI-only cuando el mismo usuario tiene múltiples tabs

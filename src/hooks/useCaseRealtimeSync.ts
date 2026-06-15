@@ -25,7 +25,7 @@ import { useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useCaseUIStoreContext } from "../context/CaseUIStoreContext";
 import { useAuth } from "../context/AuthContext";
-import type { Caso } from "../types";
+import type { Caso, ExtraccionIA, Flag, TipoCaso, EstadoCaso, Prioridad, ClosingReason, Turno, Llamada } from "../types";
 
 // ============================================================
 // Constants
@@ -130,22 +130,126 @@ function isRelevantPayload(payload: {
 // ============================================================
 
 /**
+ * Select pattern con joins para fetchear un caso completo desde Realtime.
+ * Espeja CASOS_SELECT en supabaseService.ts pero exportado para uso en hooks.
+ */
+const CASO_COMPLETO_SELECT = `
+  *,
+  extracciones_ia (*),
+  turnos (*),
+  llamadas (*),
+  asesor:asesor_id (nombre)
+` as const;
+
+/**
+ * Mapea una row de Supabase (casos + joins) al tipo Caso frontend.
+ * Espeja mapRowToCaso en supabaseService.ts.
+ */
+function mapRowToCaso(row: Record<string, unknown>): Caso {
+  const extraccion = row.extracciones_ia as Record<string, unknown> | null;
+
+  return {
+    id: row.id as string,
+    callbell_uuid: row.callbell_conversation_uuid as string,
+    contact_phone: row.contact_phone as string,
+    contact_name: row.contact_name as string,
+    tipo_caso: row.tipo_caso as TipoCaso,
+    estado: row.estado as EstadoCaso,
+    prioridad: row.prioridad as Prioridad,
+    asesor_id: (row.asesor_id as string) ?? null,
+    asesor_nombre: (row.asesor as Record<string, unknown> | null)?.nombre as string ?? null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+    resolved_at: (row.resolved_at as string) ?? null,
+    closing_reason: (row.closing_reason as ClosingReason) ?? null,
+    seguimiento_fecha: null,
+    seguimiento_nota: null,
+    extraccion_ia: extraccion
+      ? ({
+          paciente_nombre: extraccion.paciente_nombre as string,
+          paciente_dni: (extraccion.paciente_dni as string) ?? null,
+          obra_social: (extraccion.obra_social as string) ?? null,
+          nro_afiliado: (extraccion.nro_afiliado as string) ?? null,
+          nro_carnet: (extraccion.nro_carnet as string) ?? null,
+          practica: extraccion.practica as string,
+          tipo_practica: extraccion.tipo_practica as ExtraccionIA["tipo_practica"],
+          medico_derivante: (extraccion.medico_derivante as string) ?? null,
+          matricula: (extraccion.matricula as string) ?? null,
+          diagnostico: (extraccion.diagnostico as string) ?? null,
+          motivo_solicitud: (extraccion.motivo_solicitud as string) ?? null,
+          requiere_copago: (extraccion.requiere_copago as boolean) ?? false,
+          requiere_llamada: (extraccion.requiere_llamada as boolean) ?? false,
+          requiere_autorizacion: (extraccion.requiere_autorizacion as boolean) ?? false,
+          flags: (extraccion.flags as Flag[]) ?? [],
+          confianza_global: (extraccion.confianza_global as number) ?? 0,
+          confianza_campos: (extraccion.confianza_campos as Record<string, number>) ?? {},
+          orden_url: (extraccion.orden_url as string) ?? null,
+          resumen: extraccion.resumen as string,
+        } as ExtraccionIA)
+      : ({
+          paciente_nombre: row.contact_name as string,
+          paciente_dni: null,
+          obra_social: null,
+          nro_afiliado: null,
+          nro_carnet: null,
+          practica: "Pendiente de análisis",
+          tipo_practica: "otro",
+          medico_derivante: null,
+          matricula: null,
+          diagnostico: null,
+          motivo_solicitud: null,
+          requiere_copago: false,
+          requiere_llamada: false,
+          requiere_autorizacion: false,
+          flags: [],
+          confianza_global: 0,
+          confianza_campos: {},
+          orden_url: null,
+          resumen: "Pendiente de análisis por IA.",
+        } as ExtraccionIA),
+    turnos: (row.turnos as Turno[]) ?? [],
+    llamadas: (row.llamadas as Llamada[]) ?? [],
+  };
+}
+
+/**
+ * Fetch un caso completo desde Supabase con todos los joins.
+ * Se usa cuando llega un evento Realtime para obtener datos frescos
+ * (el payload del evento no incluye joins como extracciones_ia).
+ */
+async function fetchCasoCompleto(casoId: string): Promise<Caso | null> {
+  const { data, error } = await supabase
+    .from("casos")
+    .select(CASO_COMPLETO_SELECT)
+    .eq("id", casoId)
+    .single();
+
+  if (error || !data) {
+    console.warn("[REALTIME] fetchCasoCompleto falló para:", casoId, error?.message);
+    return null;
+  }
+
+  return mapRowToCaso(data as Record<string, unknown>);
+}
+
+/**
  * Hook que se suscribe a cambios Realtime en la tabla `casos`.
  *
  * Uso:
- *   useCaseRealtimeSync(); // montar en DashboardPage
+ *   useCaseRealtimeSync(refresh, addCaso, updateCaso); // montar en DashboardPage
  *
  * Comportamiento:
- *   - Se suscribe al montar, se desuscribe al desmontar
- *   - Filtra eventos relevantes (cambios en asesor_id o estado)
+ *   - INSERT: fetch del caso completo desde Supabase y llama onNuevoCaso()
+ *   - UPDATE: fetch del caso completo y llama onCasoActualizado() + reconcileCaseState
  *   - Deduplica eventos vía Set<string> con TTL de 30s
- *   - En reconnect (SUBSCRIBE event): limpia dedup cache + reconcilia
+ *   - En reconnect (SUBSCRIBE event): limpia dedup cache + refetch
  *   - En visibility change: si tab estuvo oculto > 5s, recrea suscripción
- *   - Delega el debounce al store (reconcileCaseState tiene 300ms interno)
  *   - Reconoce RLS: el usuario solo recibe eventos de casos visibles
  */
 export function useCaseRealtimeSync(
   refetchCases?: () => Promise<void>,
+  onNuevoCaso?: (caso: Caso) => void,
+  onCasoActualizado?: (caso: Caso) => void,
 ): void {
   const { user } = useAuth();
   const { reconcileCaseState } = useCaseUIStoreContext();
@@ -197,13 +301,39 @@ export function useCaseRealtimeSync(
           // --- Step 2: Filter isRelevantPayload ---
           if (!isRelevantPayload(event)) return;
 
-          // --- Step 3: Convertir y delegar al store ---
-          const changedCase = event.new as unknown as Caso;
-          if (changedCase?.id) {
-            console.log("[REALTIME] Llamando reconcileCaseState — caso:", changedCase.id, "tieneExtraccionIA:", !!changedCase.extraccion_ia);
-            reconcileCaseState([changedCase], user.id);
-          } else {
-            console.warn("[REALTIME] changedCase sin id — skip:", JSON.stringify(changedCase));
+          const caseId = event.new?.id as string | undefined;
+          if (!caseId) {
+            console.warn("[REALTIME] Evento sin caseId — skip:", JSON.stringify(event));
+            return;
+          }
+
+          // --- Step 3: Manejar según tipo de evento ---
+          if (event.eventType === "INSERT") {
+            // INSERT: fetch caso completo con joins (el payload Realtime no incluye joins)
+            console.log("[REALTIME] INSERT recibido — fetcheando caso completo:", caseId);
+            fetchCasoCompleto(caseId).then((caso) => {
+              if (caso && onNuevoCaso) {
+                console.log("[REALTIME] INSERT — caso completo obtenido, llamando onNuevoCaso:", caso.id);
+                onNuevoCaso(caso);
+              } else if (!caso) {
+                console.warn("[REALTIME] INSERT — fetchCasoCompleto devolvió null para:", caseId);
+              }
+            });
+          } else if (event.eventType === "UPDATE") {
+            // UPDATE: fetch caso completo y actualizar lista + store UI
+            console.log("[REALTIME] UPDATE recibido — fetcheando caso completo:", caseId);
+            fetchCasoCompleto(caseId).then((caso) => {
+              if (caso) {
+                if (onCasoActualizado) {
+                  console.log("[REALTIME] UPDATE — caso completo obtenido, llamando onCasoActualizado:", caso.id);
+                  onCasoActualizado(caso);
+                }
+                // También reconciliar estado UI (claiming → claimed_by_me/other)
+                reconcileCaseState([caso], user.id);
+              } else {
+                console.warn("[REALTIME] UPDATE — fetchCasoCompleto devolvió null para:", caseId);
+              }
+            });
           }
         },
       )

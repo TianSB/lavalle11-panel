@@ -3,11 +3,15 @@ import type { Caso, MetricaResumen, CasoPorTipo, VolumenDiario, TipoCaso } from 
 import { TIPOS_CASO } from "../constants";
 import { useCasoService } from "../context/CasoServiceContext";
 
-interface UseCasosReturn {
+export interface UseCasosReturn {
   casos: Caso[];
   isLoading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /** Agregar un caso nuevo al tope del array (desde Realtime INSERT) */
+  addCaso: (caso: Caso) => void;
+  /** Reemplazar un caso existente en el array (desde Realtime UPDATE) */
+  updateCaso: (caso: Caso) => void;
 }
 
 /**
@@ -34,6 +38,28 @@ export function useCasos(): UseCasosReturn {
     }
   }, [service]);
 
+  // Agregar caso nuevo al tope del array
+  const addCaso = useCallback((nuevoCaso: Caso) => {
+    setCasos((prev) => {
+      // Evitar duplicados por si el evento llega dos veces
+      if (prev.some((c) => c.id === nuevoCaso.id)) return prev;
+      console.log("[USECASOS] addCaso:", nuevoCaso.id);
+      return [nuevoCaso, ...prev];
+    });
+  }, []);
+
+  // Reemplazar caso existente (por update del servidor)
+  const updateCaso = useCallback((casoActualizado: Caso) => {
+    setCasos((prev) => {
+      const idx = prev.findIndex((c) => c.id === casoActualizado.id);
+      if (idx === -1) return prev;
+      console.log("[USECASOS] updateCaso:", casoActualizado.id);
+      const next = [...prev];
+      next[idx] = casoActualizado;
+      return next;
+    });
+  }, []);
+
   // Log cuando cambia el array de casos (por fetch directo o refresh)
   useEffect(() => {
     if (casos.length > 0) {
@@ -45,7 +71,7 @@ export function useCasos(): UseCasosReturn {
     fetch();
   }, [fetch]);
 
-  return { casos, isLoading, error, refresh: fetch };
+  return { casos, isLoading, error, refresh: fetch, addCaso, updateCaso };
 }
 
 interface UseCasosFiltradosReturn {
