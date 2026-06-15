@@ -2,7 +2,7 @@
 // providers.test.ts — Tests para MockAIProvider y aiFactory
 // ============================================================
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { MockAIProvider } from "../ai/mockProvider.js";
 import { getAIProvider, _resetAIProvider } from "../ai/aiFactory.js";
 import { entradaSinAdjuntos, entradaConAdjuntos } from "./fixtures.js";

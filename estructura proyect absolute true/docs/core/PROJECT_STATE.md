@@ -2,8 +2,8 @@
 
 > **Instituto Lavalle 11 · Bahía Blanca, Argentina**
 > Documento maestro de estado del proyecto.
-> **Última actualización:** 2026-06-14 (Sesión 24)
-> **Versión:** 2.0 — Fase 3 completa. Claude API integrada con tool_use y visión. Reapertura de casos cerrados. ✅ Fases 0 a 3 completadas.
+> **Última actualización:** 2026-06-14 (Sesión 25)
+> **Versión:** 2.1 — Fase 3 completa. Tests unitarios (34). Frontend verificado conectado a Supabase. Env vars de IA pendientes de configurar en Vercel scope Production.
 
 ---
 
@@ -31,11 +31,11 @@
 | **Fase 2.1 — Supabase Auth (conectar a DB real)** | ✅ Completada | 100% |
 | **Fase 2.2 — Backend + Webhook de Callbell** | ✅ **Completada** | 100% |
 | **Fase 2.3 — Realtime + Endpoints REST** | ✅ **Completada** | 100% |
-| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100%** — Provider-agnostic, tool_use, visión, mock, reapertura casos |
+| **Fase 3 — Análisis con Claude IA** | ✅ **Completada** | **100%** — +34 tests unitarios |
 | Fase 4 — Acciones del asesor (flujo completo) | ⬜ Pendiente | 0% |
 | Fase 5 — Seguimiento y métricas | ⬜ Pendiente | 0% |
 
-**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production para activar IA real. Luego Fase 4 o mejoras de UI.
+**Siguiente paso:** Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production (scope correcto) y hacer Redeploy del último commit. Verificar log: `[AI_FACTORY] Provider activo: claude`.
 
 ---
 
@@ -107,15 +107,17 @@ WhatsApp → Callbell → Webhook Vercel → handleWebhook()
 
 ### Variables de Entorno en Vercel
 
-| Variable | Estado |
-|---|---|
-| `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada (Production) |
-| `SUPABASE_URL` | ✅ Configurada (Production) |
-| `SUPABASE_SERVICE_ROLE_KEY` | ✅ Configurada (Production) |
-| `PRIMARY_PROVIDER` | ⬜ **Pendiente — configurar "claude"** |
-| `ANTHROPIC_API_KEY` | ⬜ **Pendiente — configurar sk-ant-...** |
-| `VITE_SUPABASE_URL` | ⬜ Frontend no deployado aún |
-| `VITE_SUPABASE_ANON_KEY` | ⬜ Frontend no deployado aún |
+| Variable | Estado | Scope |
+|---|---|---|
+| `CALLBELL_WEBHOOK_SECRET` | ✅ Configurada | Production |
+| `SUPABASE_URL` | ✅ Configurada | Production |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ Configurada | Production |
+| `PRIMARY_PROVIDER` | ⬜ **Pendiente** — configurar como `claude` en Production | Production |
+| `ANTHROPIC_API_KEY` | ⬜ **Pendiente** — configurar sk-ant-... en Production | Production |
+| `VITE_SUPABASE_URL` | ✅ Configurada en `.env.local` | ⬜ No en Vercel aún |
+| `VITE_SUPABASE_ANON_KEY` | ✅ Configurada en `.env.local` | ⬜ No en Vercel aún |
+
+**⚠️ Diagnóstico (Sesión 25):** El log del webhook muestra `[AI_FACTORY] Provider activo: mock`, lo que confirma que `PRIMARY_PROVIDER` y `ANTHROPIC_API_KEY` no están llegando al runtime serverless. `vercel.json` no tiene restricciones de env vars. Causa probable: las variables se configuraron en scope Preview en lugar de Production, o falta hacer Redeploy después de configurarlas.
 
 ---
 
@@ -220,32 +222,41 @@ getAIProvider()  ← aiFactory.ts (singleton)
 │       └── webhook.ts            # Serverless Function — process-first pattern
 ├── src/
 │   ├── services/
-│   │   ├── ai/                   # ★ NUEVO — Capa de IA (Fase 3)
-│   │   │   ├── types.ts          #   Interfaces canónicas (EntradaCanónica, RespuestaCanónica, etc.)
-│   │   │   ├── imageProcessor.ts #   Descarga adjuntos → base64 (8s timeout, 4MB max)
-│   │   │   ├── claudeAdapter.ts  #   Claude Sonnet 4.5 con tool_use y visión
-│   │   │   ├── mockProvider.ts   #   Mock para desarrollo sin consumir tokens
-│   │   │   └── aiFactory.ts      #   Factory singleton con fallback a mock
+│   │   ├── __tests__/            # ★ NUEVO — Tests unitarios (Sesión 24-25)
+│   │   │   ├── fixtures.ts       #   Fixtures compartidos (8)
+│   │   │   ├── providers.test.ts #   19 tests: MockAIProvider + aiFactory
+│   │   │   └── casoService.test.ts # 15 tests: buildFlags + reabrirCaso + actualizarExtraccionIA
+│   │   ├── ai/                   # Capa de IA (Fase 3)
+│   │   │   ├── types.ts          #   Interfaces canónicas
+│   │   │   ├── imageProcessor.ts #   Descarga adjuntos → base64
+│   │   │   ├── claudeAdapter.ts  #   Claude Sonnet 4.5 con tool_use
+│   │   │   ├── mockProvider.ts   #   Mock para desarrollo
+│   │   │   └── aiFactory.ts      #   Factory singleton con fallback
 │   │   ├── auditService.ts       # AuditService con 4 funciones semánticas
 │   │   ├── callbell/
-│   │   │   ├── types.ts          # Tipos del payload de Callbell (incluye CallbellAttachmentPayload)
-│   │   │   ├── payloadParser.ts  # Parseador con soporte attachment string/object + content_type
-│   │   │   └── webhookHandler.ts # Lógica de negocio + IA + 3 ramas (activo/cerrado/nuevo)
+│   │   │   ├── types.ts          # Tipos del payload de Callbell
+│   │   │   ├── payloadParser.ts  # Parseador con soporte attachment biforma
+│   │   │   └── webhookHandler.ts # Lógica + IA + 3 ramas
 │   │   ├── supabase/
-│   │   │   └── casoService.ts    # CRUD server-side + reabrirCaso + actualizarExtraccionIA + buildFlags
-│   │   └── mockService.ts        # Mock service (frontend)
+│   │   │   └── casoService.ts    # CRUD + reabrirCaso + actualizarExtraccionIA + buildFlags (exportado)
+│   │   ├── supabaseService.ts    # Implementación real frontend
+│   │   └── mockService.ts        # CasoService interface + mock (no usado)
 │   ├── lib/
 │   │   └── supabase.ts           # Cliente Supabase (frontend)
 │   ├── types/
 │   │   └── index.ts              # Tipos compartidos
 │   ├── hooks/
-│   │   └── useCasos.ts           # Hook de casos con service layer
+│   │   ├── useCasos.ts           # Hook de casos con service layer
+│   │   ├── useCaseRealtimeSync.ts # Suscripción Realtime
+│   │   └── useAsignarCaso.ts     # Asignación optimista
 │   ├── context/
-│   │   └── AuthContext.tsx        # Contexto de autenticación
+│   │   ├── CaseUIStoreContext.tsx # UI store
+│   │   ├── CasoServiceContext.tsx # DI: inyecta supabaseCasoService
+│   │   └── AuthContext.tsx        # Autenticación
 │   ├── components/               # Componentes React
 │   ├── pages/                    # Páginas
 │   └── data/
-│       └── mockCases.ts          # Datos mock
+│       └── mockCases.ts          # Datos mock (no usado por frontend)
 ├── database/
 │   └── migrations/
 │       ├── 001_enums.sql
@@ -267,19 +278,20 @@ getAIProvider()  ← aiFactory.ts (singleton)
 | # | Riesgo | Impacto | Severidad | Estado |
 |---|---|---|---|---|
 | R01 | Precisión de Claude en órdenes manuscritas | Alto | 🔴 Crítico | 🟡 Mitigado (score de confianza + revisión manual) |
-| R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID + RAMA 1/2 detectan casos existentes) |
+| R06 | Webhooks duplicados de Callbell | Medio | 🟡 Alto | Mitigado (idempotencia por UUID + RAMA 1/2) |
 | R10 | Cold starts de Vercel Serverless | Bajo | 🟢 Bajo | Aceptable |
-| R13 | Límite de tiempo Vercel Hobby (10s) para análisis IA con imágenes | Medio | 🟡 Alto | 🟡 Mitigado: max_tokens 1024, timeout descarga 8s, una sola llamada |
+| R13 | Límite de tiempo Vercel Hobby (10s) para análisis IA | Medio | 🟡 Alto | 🟡 Mitigado: max_tokens 1024, timeout 8s, single turn |
+| **R14** | **Env vars de IA no llegan al runtime serverless** | **Alto** | **🔴 Crítico** | **🟡 En diagnóstico: verificar scope Production vs Preview + Redeploy** |
 
 ---
 
 ## 10. Próximos Pasos Inmediatos
 
-1. 🟢 **Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY`** en Vercel Production
-2. 🟢 **Probar webhook con IA real**: enviar mensaje desde WhatsApp y verificar logs
-3. ⬜ **Revisar frontend**: conectar DashboardPage a datos reales de Supabase
-4. ⬜ **Refactor menor**: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 en webhookHandler
-5. ⬜ **Siguiente fase**: Fase 4 — Acciones del asesor o mejoras de UI
+1. 🔴 **Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel Production** (verificar scope)
+2. 🔴 **Hacer Redeploy del último commit** (forzar nueva build que capture env vars)
+3. 🟢 **Verificar log del webhook**: debe mostrar `[AI_FACTORY] Provider activo: claude`
+4. ⬜ Probar webhook con IA real desde WhatsApp
+5. ⬜ Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3
 
 ---
 
@@ -289,5 +301,5 @@ getAIProvider()  ← aiFactory.ts (singleton)
 - **Autor PRD:** RIA · r-ia.vercel.app
 - **Repositorio:** `github.com:TianSB/lavalle11-panel`
 - **Dominio:** `https://l11panel.vercel.app`
-- **Último commit:** `9a2a7ed` — `feat(ia): Fase 3 completa — integración Claude API + reapertura de casos cerrados`
+- **Último commit:** `5acf641` — `chore: add tests (vitest), update docs, export buildFlags for Fase 3`
 - **Documentación completa:** Ver `docs/` y archivos maestros en raíz

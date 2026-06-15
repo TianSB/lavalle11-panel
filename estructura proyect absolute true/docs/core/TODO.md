@@ -1,8 +1,8 @@
 # TODO — Plan de Trabajo y Seguimiento
 
 > **Proyecto:** Panel de Gestión de Turnos con IA — Instituto Lavalle 11
-> **Última actualización:** 2026-06-14 (Sesión 24)
-> **Progreso general:** ~82% (114/139 tareas completadas) — Fases 0 a 3 completas ✅
+> **Última actualización:** 2026-06-14 (Sesión 25)
+> **Progreso general:** ~82% (116/141 tareas completadas) — Fases 0 a 3 completas ✅
 >
 > **Leyenda:** ✅ Completo | 🔄 En progreso | ⬜ Pendiente | ❌ Bloqueado | 🟡 En revisión
 
@@ -91,39 +91,40 @@
 | 2.3.2 | Implementar GET /api/casos/:id | ✅ | `api/casos/[id].ts` — caso individual con joins + 404 handling |
 | 2.3.3 | Implementar PATCH /api/casos/:id | ⬜ | **Diferido a Fase 4** — requiere Callbell Messages API |
 | 2.3.4 | Conectar Supabase Realtime al frontend | ✅ | `useCaseRealtimeSync.ts` |
-| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ | `supabaseService.ts` vía `CasoServiceProvider` |
+| 2.3.5 | Migrar CasoService mock → SupabaseApiService | ✅ ✅ | **Verificado en Sesión 25: frontend ya conectado** ✅ |
 
 ---
 
 ## Fase 3 — Análisis con Claude IA ✅
 
 **Objetivo:** Las cards aparecen con datos prellenados y resumen de IA.
-**Estado: ✅ COMPLETADA en Sesión 24.**
+**Estado: ✅ COMPLETADA en Sesión 24. Tests agregados en Sesión 25.**
 
 | # | Tarea | Estado | Archivo | Notas |
 |---|---|---|---|---|
-| 3.1 | Definir interfaces canónicas (EntradaCanónica, RespuestaCanónica, AIProvider, AIError) | ✅ | `src/services/ai/types.ts` | Contrato único, independiente del provider |
+| 3.1 | Definir interfaces canónicas | ✅ | `src/services/ai/types.ts` | Contrato único, independiente del provider |
 | 3.2 | Implementar descarga de adjuntos (imageProcessor) | ✅ | `src/services/ai/imageProcessor.ts` | 8s timeout, 4MB max, fallback graceful |
-| 3.3 | Implementar ClaudeAdapter con tool_use y visión | ✅ | `src/services/ai/claudeAdapter.ts` | `claude-sonnet-4-5`, `max_tokens: 1024`, `tool_choice: any` |
-| 3.4 | Implementar MockAIProvider para desarrollo | ✅ | `src/services/ai/mockProvider.ts` | 50ms simulación, respuestas realistas |
-| 3.5 | Implementar aiFactory singleton con fallback a mock | ✅ | `src/services/ai/aiFactory.ts` | Lee `PRIMARY_PROVIDER` env var |
-| 3.6 | Conectar IA en webhookHandler (reemplazar TODO) | ✅ | `src/services/callbell/webhookHandler.ts` | 3 ramas: activo / cerrado / nuevo |
+| 3.3 | Implementar ClaudeAdapter con tool_use y visión | ✅ | `src/services/ai/claudeAdapter.ts` | `claude-sonnet-4-5`, `max_tokens: 1024` |
+| 3.4 | Implementar MockAIProvider para desarrollo | ✅ | `src/services/ai/mockProvider.ts` | 50ms simulación |
+| 3.5 | Implementar aiFactory singleton con fallback | ✅ | `src/services/ai/aiFactory.ts` | Lee `PRIMARY_PROVIDER` env var |
+| 3.6 | Conectar IA en webhookHandler (3 ramas) | ✅ | `src/services/callbell/webhookHandler.ts` | activo / cerrado / nuevo |
 | 3.7 | createCaso acepta analisis param opcional | ✅ | `src/services/supabase/casoService.ts` | Backward compatible |
-| 3.8 | Implementar buildFlags (flags IA + flags sistema) | ✅ | `src/services/supabase/casoService.ts` | 🤖 + ⚙️ combinados |
-| 3.9 | Implementar reabrirCaso para casos cerrados | ✅ | `src/services/supabase/casoService.ts` | Resetea estado + re-analiza con IA |
-| 3.10 | Implementar actualizarExtraccionIA | ✅ | `src/services/supabase/casoService.ts` | UPDATE por caso_id, reusa buildFlags |
-| 3.11 | Agregar conversation_opened al switch de eventos | ✅ | `src/services/callbell/webhookHandler.ts` | Log explícito, sin acción |
-| 3.12 | Soportar adjuntos como objetos con content_type | ✅ | `src/services/callbell/types.ts` + `payloadParser.ts` | `CallbellAttachmentPayload`, backward compat string[] |
-| 3.13 | Instalar @anthropic-ai/sdk | ✅ | `package.json` | SDK oficial Anthropic para Node.js |
-| 3.14 | Commit + push a main | ✅ | `9a2a7ed` | Auto-deploy Vercel |
+| 3.8 | buildFlags (flags IA + flags sistema) | ✅ | `src/services/supabase/casoService.ts` | Exportado para tests |
+| 3.9 | reabrirCaso para casos cerrados | ✅ | `src/services/supabase/casoService.ts` | Resetea estado + re-analiza |
+| 3.10 | actualizarExtraccionIA | ✅ | `src/services/supabase/casoService.ts` | UPDATE + buildFlags |
+| 3.11 | conversation_opened en switch | ✅ | `src/services/callbell/webhookHandler.ts` | Log sin acción |
+| 3.12 | Adjuntos como objetos con content_type | ✅ | `types.ts` + `payloadParser.ts` | Biforma string/object |
+| 3.13 | Instalar @anthropic-ai/sdk | ✅ | `package.json` | SDK oficial |
+| 3.14 | Tests unitarios (vitest, 34 tests) | ✅ | `src/services/__tests__/*.test.ts` | 2 files, 34 tests pasando |
+| 3.15 | buildFlags exportado | ✅ | `src/services/supabase/casoService.ts` | `export function buildFlags` |
 
 ### Pendientes post-Fase 3
 
-| # | Tarea | Estado |
-|---|---|---|
-| 3.15 | Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel | ⬜ |
-| 3.16 | Probar webhook con IA real desde WhatsApp | ⬜ |
-| 3.17 | Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 | ⬜ |
+| # | Tarea | Estado | Diagnóstico |
+|---|---|---|---|
+| 3.16 | Configurar `PRIMARY_PROVIDER=claude` y `ANTHROPIC_API_KEY` en Vercel | 🔴 **Bloqueado** | Env vars no llegan al runtime. Verificar scope Production vs Preview + Redeploy |
+| 3.17 | Probar webhook con IA real desde WhatsApp | ⬜ | Bloqueado por 3.16 |
+| 3.18 | Refactor menor: extraer bloque IA duplicado entre RAMA 2 y RAMA 3 | ⬜ | |
 
 ---
 
@@ -158,6 +159,8 @@
 | — | Respond-first pattern corregido (await) | ✅ | try/await/catch |
 | — | Attachment type biforma (string/object) + content_type | ✅ | `payloadParser.ts` + `types.ts` |
 | — | Reapertura de casos cerrados | ✅ | `reabrirCaso()` + `actualizarExtraccionIA()` |
+| — | Vitest configurado + 34 tests | ✅ | `vite.config.ts`, 2 test files |
+| — | Frontend verificado conectado a Supabase | ✅ | Ya usaba `supabaseCasoService` por defecto |
 
 ---
 
@@ -170,11 +173,11 @@
 | **Fase 1.5** — Refactor QA | 10 | 10 | 0 | 0 | **100%** |
 | **Fase 2.1** — Supabase Auth | 12 | 12 | 0 | 0 | **100%** |
 | **Fase 2.2** — Backend + Webhook | 28 | 28 | 0 | 0 | **100%** |
-| **Fase 2.3** — Realtime + REST | 5 | 4 | 0 | 1 | **80%** |
-| **Fase 3** — Claude IA | 17 | 14 | 0 | 3 | **82%** |
+| **Fase 2.3** — Realtime + REST | 5 | 5 | 0 | 0 | **100%** |
+| **Fase 3** — Claude IA | 18 | 16 | 1 | 1 | **89%** |
 | **Fase 4** — Acciones asesor | 10 | 0 | 0 | 10 | **0%** |
 | **Fase 5** — Métricas | 8 | 0 | 0 | 8 | **0%** |
-| **Otros** | 6 | 6 | 0 | 0 | **100%** |
-| **Total general** | **139** | **114** | **0** | **25** | **~82%** |
+| **Otros** | 7 | 7 | 0 | 0 | **100%** |
+| **Total general** | **141** | **116** | **1** | **24** | **~82%** |
 
-> Nota: Fase 3 tiene 3 pendientes post-implementación (configurar env vars en Vercel, probar con IA real, refactor menor). El core de la fase está 100% implementado y compilando.
+> Nota: Fase 3.16 (env vars) está bloqueada por scope de Vercel. Resolver para desbloquear 3.17 (prueba con IA real). Frontend 2.3.5 verificado conectado.
