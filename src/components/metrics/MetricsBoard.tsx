@@ -1,13 +1,116 @@
+import { useCallback } from "react";
 import { useMetricas } from "../../hooks/useCasos";
+
+/**
+ * Escape a CSV value: wrap in quotes if it contains commas, quotes, or newlines.
+ */
+function csvEscape(val: string | number | null | undefined): string {
+  if (val == null) return "";
+  const str = String(val);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Generate a multi-section CSV with all metrics data and trigger download.
+ */
+function downloadMetricsCSV({
+  resumen,
+  porTipo,
+  volumenDiario,
+  porAsesor,
+  now,
+}: {
+  resumen: NonNullable<ReturnType<typeof useMetricas>["resumen"]>;
+  porTipo: ReturnType<typeof useMetricas>["porTipo"];
+  volumenDiario: ReturnType<typeof useMetricas>["volumenDiario"];
+  porAsesor: ReturnType<typeof useMetricas>["porAsesor"];
+  now: Date;
+}) {
+  const rows: string[] = [];
+  const dateStr = now.toISOString().slice(0, 10);
+
+  // -- Resumen KPIs --
+  rows.push("Resumen");
+  rows.push("Indicador,Valor");
+  rows.push(`Casos activos,${csvEscape(resumen.casos_activos)}`);
+  rows.push(`Casos hoy,${csvEscape(resumen.casos_hoy)}`);
+  rows.push(`Sin asignar,${csvEscape(resumen.casos_sin_asignar)}`);
+  rows.push(`Sin atender 24hs,${csvEscape(resumen.casos_sin_atender_24hs)}`);
+  rows.push(`Tiempo promedio (min),${csvEscape(resumen.tiempo_promedio_resolucion_min)}`);
+  rows.push(`Resolución automática,${csvEscape(`${Math.round(resumen.tasa_resolucion_automatica * 100)}%`)}`);
+  rows.push("");
+
+  // -- Casos por tipo --
+  rows.push("Casos por tipo");
+  rows.push("Tipo,Nombre,Cantidad");
+  for (const t of porTipo) {
+    rows.push(`${csvEscape(t.tipo)},${csvEscape(t.nombre)},${csvEscape(t.cantidad)}`);
+  }
+  rows.push("");
+
+  // -- Volumen diario (últimos 30 días) --
+  rows.push("Volumen diario");
+  rows.push("Fecha,Total,Nuevos,Resueltos,Automáticos");
+  for (const v of volumenDiario) {
+    rows.push(
+      `${csvEscape(v.fecha)},${csvEscape(v.total)},${csvEscape(v.total - v.resueltos)},${csvEscape(v.resueltos)},${csvEscape(v.automaticos)}`,
+    );
+  }
+  rows.push("");
+
+  // -- Rendimiento por asesor --
+  if (porAsesor.length > 0) {
+    rows.push("Rendimiento por asesor");
+    rows.push("Asesor,Casos activos,Casos resueltos,Tiempo promedio (min),Tasa resolución,Última actividad");
+    for (const a of porAsesor) {
+      rows.push(
+        `${csvEscape(a.asesor_nombre)},${csvEscape(a.casos_activos)},${csvEscape(a.casos_resueltos)},${csvEscape(a.tiempo_promedio_resolucion_min)},${csvEscape(`${Math.round(a.tasa_resolucion * 100)}%`)},${csvEscape(a.ultima_actividad ?? "")}`,
+      );
+    }
+    rows.push("");
+  }
+
+  // Build file and trigger download
+  const csvContent = rows.join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `metricas-${dateStr}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export function MetricsBoard() {
   const { resumen, porTipo, volumenDiario, porAsesor, isLoading } = useMetricas();
   const maxTipo = Math.max(...porTipo.map((t) => t.cantidad), 1);
   const maxVolumen = Math.max(...volumenDiario.map((v) => v.total), 1);
 
+  const handleExportCSV = useCallback(() => {
+    if (!resumen) return;
+    downloadMetricsCSV({ resumen, porTipo, volumenDiario, porAsesor, now: new Date() });
+  }, [resumen, porTipo, volumenDiario, porAsesor]);
+
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-gray-900">Dashboard de Métricas</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">Dashboard de Métricas</h2>
+        <button
+          onClick={handleExportCSV}
+          disabled={!resumen}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition-all hover:bg-gray-50 hover:border-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Exportar CSV
+        </button>
+      </div>
 
       {/* Loading state */}
       {isLoading && !resumen ? (
