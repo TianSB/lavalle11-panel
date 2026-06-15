@@ -318,7 +318,10 @@ function caseUIReducer(
         const entry = next[serverCase.id];
 
         // --- Step 1: Si no hay entry UI, no hay nada que reconciliar ---
-        if (!entry) continue;
+        if (!entry) {
+          console.log("[RECONCILE] Caso sin entry UI — ignorado (reducer no agrega casos nuevos, solo reconcilia estados UI):", serverCase.id, "eventType:", (serverCase as any).eventType);
+          continue;
+        }
 
         // --- Step 2: Optimistic Lock Check (local tab) ---
         // Si el usuario de esta tab acaba de iniciar una acción (< 2s), ignorar reconcile

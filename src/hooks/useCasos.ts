@@ -25,6 +25,7 @@ export function useCasos(): UseCasosReturn {
     setError(null);
     try {
       const data = await service.getCasos();
+      console.log("[USECASOS] fetch completado — casos recibidos:", data.length, data.map(c => c.id).join(", "));
       setCasos(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar casos");
@@ -32,6 +33,13 @@ export function useCasos(): UseCasosReturn {
       setIsLoading(false);
     }
   }, [service]);
+
+  // Log cuando cambia el array de casos (por fetch directo o refresh)
+  useEffect(() => {
+    if (casos.length > 0) {
+      console.log("[USECASOS] estado actualizado — casos:", casos.length);
+    }
+  }, [casos.length]);
 
   useEffect(() => {
     fetch();

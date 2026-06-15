@@ -200,7 +200,10 @@ export function useCaseRealtimeSync(
           // --- Step 3: Convertir y delegar al store ---
           const changedCase = event.new as unknown as Caso;
           if (changedCase?.id) {
+            console.log("[REALTIME] Llamando reconcileCaseState — caso:", changedCase.id, "tieneExtraccionIA:", !!changedCase.extraccion_ia);
             reconcileCaseState([changedCase], user.id);
+          } else {
+            console.warn("[REALTIME] changedCase sin id — skip:", JSON.stringify(changedCase));
           }
         },
       )
