@@ -172,11 +172,18 @@ function buildUserContent(
   }
 
   // Instrucción final
+  let instruccionFinal: string;
+  if (adjuntosProcesados.length > 0) {
+    instruccionFinal = "Analizá el mensaje y la imagen de la orden médica adjunta. Invocá registrar_analisis_caso con los datos extraídos.";
+  } else if (entrada.adjuntos.length > 0) {
+    instruccionFinal = "No hay imágenes disponibles (URLs expiradas). Analizar solo con el texto del mensaje. Invocá registrar_analisis_caso con los datos que puedas extraer.";
+  } else {
+    instruccionFinal = "Analizá el mensaje. No hay imagen adjunta. Invocá registrar_analisis_caso con los datos que puedas extraer.";
+  }
+
   content.push({
     type: "text",
-    text: adjuntosProcesados.length > 0
-      ? "Analizá el mensaje y la imagen de la orden médica adjunta. Invocá registrar_analisis_caso con los datos extraídos."
-      : "Analizá el mensaje. No hay imagen adjunta. Invocá registrar_analisis_caso con los datos que puedas extraer.",
+    text: instruccionFinal,
   });
 
   return content;

@@ -47,8 +47,9 @@ export async function procesarAdjuntos(
   );
 
   const exitosos = resultados
-    .filter((r): r is PromiseFulfilledResult<AdjuntoProcesado> => r.status === "fulfilled")
-    .map((r) => r.value);
+    .filter((r): r is PromiseFulfilledResult<AdjuntoProcesado | null> => r.status === "fulfilled")
+    .map((r) => r.value)
+    .filter((v): v is AdjuntoProcesado => v !== null);
 
   const fallidos = resultados.filter((r) => r.status === "rejected").length;
   if (fallidos > 0) {
@@ -61,7 +62,7 @@ export async function procesarAdjuntos(
 async function descargarAdjunto(
   url: string,
   mimeType: string,
-): Promise<AdjuntoProcesado> {
+): Promise<AdjuntoProcesado | null> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -69,16 +70,24 @@ async function descargarAdjunto(
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
 
+    if (response.status === 403 || response.status === 401) {
+      console.warn("[IMAGE_PROCESSOR] URL expirada — continuando sin imagen:", url);
+      return null;
+    }
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status} al descargar adjunto`);
+      console.warn("[IMAGE_PROCESSOR] HTTP", response.status, "— continuando sin imagen:", url);
+      return null;
     }
 
     const arrayBuffer = await response.arrayBuffer();
 
     if (arrayBuffer.byteLength > MAX_SIZE_BYTES) {
-      throw new Error(
-        `Adjunto demasiado grande: ${arrayBuffer.byteLength} bytes (máx ${MAX_SIZE_BYTES})`,
+      console.warn(
+        "[IMAGE_PROCESSOR] Adjunto demasiado grande:",
+        arrayBuffer.byteLength, "bytes — continuando sin imagen:", url,
       );
+      return null;
     }
 
     const base64 = Buffer.from(arrayBuffer).toString("base64");
@@ -91,7 +100,8 @@ async function descargarAdjunto(
     };
   } catch (err) {
     clearTimeout(timeout);
-    console.warn("[IMAGE_PROCESSOR] No se pudo procesar adjunto:", url, err);
-    throw err;
+    // Si es un error de red o timeout, las URLs probablemente expiraron
+    console.warn("[IMAGE_PROCESSOR] URL expirada — continuando sin imagen:", url);
+    return null;
   }
 }

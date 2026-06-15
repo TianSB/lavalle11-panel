@@ -83,6 +83,8 @@ export interface ExtraccionIA {
   flags: Flag[];
   confianza_global: number;
   confianza_campos: Record<string, number>;
+  modelo_ia: string;
+  campos_baja_confianza: string[];
   orden_url: string | null;
   resumen: string;
 }

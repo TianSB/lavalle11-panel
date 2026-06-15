@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Caso } from "../../types";
 import type { AssignCaseResult } from "../../services/errors";
 import { Badge, FlagBadge, PrioridadIndicator } from "../ui/Badge";
@@ -13,6 +13,8 @@ interface CaseCardProps {
    * El estado UI lo maneja el store global — este callback solo llama al hook.
    */
   onAsignar?: (casoId: string) => Promise<AssignCaseResult>;
+  /** Callback para refrescar la lista de casos desde el servidor */
+  onRefresh?: () => void;
 }
 
 const estadoStyles: Record<string, { label: string; color: "blue" | "orange" | "yellow" | "green" }> = {
@@ -91,11 +93,81 @@ function AssignOverlay({ status }: { status: CaseUIStatus | undefined }) {
 }
 
 // ============================================================
+// AnalizarButton — botón inline para casos sin análisis IA
+// ============================================================
+
+function AnalizarButton({ casoId, onRefresh }: { casoId: string; onRefresh?: () => void }) {
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setState("loading");
+    try {
+      const res = await fetch(`/api/casos/${casoId}/re-analizar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setState("idle");
+        onRefresh?.();
+      } else {
+        setState("error");
+      }
+    } catch {
+      setState("error");
+    }
+  };
+
+  if (state === "loading") {
+    return (
+      <button
+        disabled
+        className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-400 cursor-wait"
+      >
+        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Analizando...
+      </button>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <button
+        onClick={handleClick}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 transition-all hover:bg-red-100 hover:border-red-300"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Reintentar
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 transition-all hover:bg-purple-100 hover:border-purple-300"
+    >
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+      </svg>
+      Analizar con IA
+    </button>
+  );
+}
+
+// ============================================================
 // CaseCard — component
 // El estado UI viene del store global (useCaseUIStoreContext)
 // NO de estado local — consistente entre vistas y preparado para Realtime.
 // ============================================================
-export function CaseCard({ caso, onClick, onAsignar }: CaseCardProps) {
+export function CaseCard({ caso, onClick, onAsignar, onRefresh }: CaseCardProps) {
   const { getCaseUIState, clearCaseUIState } = useCaseUIStoreContext();
   const uiState = getCaseUIState(caso.id);
   const autoResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -228,21 +300,28 @@ export function CaseCard({ caso, onClick, onAsignar }: CaseCardProps) {
         </div>
       </button>
 
-      {/* Tomar caso — solo para casos sin asignar y pendientes */}
-      {/* Si hay estado UI activo (claiming, claimed_by_other), no mostrar botón */}
-      {isAssignable(caso) && onAsignar && !uiState && (
-        <div className="relative px-0 pt-1">
-          <button
-            onClick={handleAssign}
-            className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-all hover:bg-blue-100 hover:border-blue-300"
-          >
-            <span className="flex items-center justify-center gap-2">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Tomar caso
-            </span>
-          </button>
+      {/* Action buttons — mostrar solo si no hay overlay activo */}
+      {!uiState && (
+        <div className="flex flex-wrap items-center gap-2 px-0 pt-1">
+          {/* Tomar caso — solo para casos sin asignar y pendientes */}
+          {isAssignable(caso) && onAsignar && (
+            <button
+              onClick={handleAssign}
+              className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-all hover:bg-blue-100 hover:border-blue-300"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Tomar caso
+              </span>
+            </button>
+          )}
+
+          {/* Analizar con IA — visible cuando modelo_ia es 'pendiente' (sin analizar) */}
+          {caso.extraccion_ia.modelo_ia === 'pendiente' && (
+            <AnalizarButton casoId={caso.id} onRefresh={onRefresh} />
+          )}
         </div>
       )}
 

@@ -74,6 +74,8 @@ function mapRowToCaso(row: Record<string, unknown>): Caso {
           flags: (extraccion.flags as Flag[]) ?? [],
           confianza_global: (extraccion.confianza_global as number) ?? 0,
           confianza_campos: (extraccion.confianza_campos as Record<string, number>) ?? {},
+          modelo_ia: (extraccion.modelo_ia as string) ?? "pendiente",
+          campos_baja_confianza: (extraccion.campos_baja_confianza as string[]) ?? [],
           orden_url: (extraccion.orden_url as string) ?? null,
           resumen: extraccion.resumen as string,
         } as ExtraccionIA)
@@ -95,6 +97,8 @@ function mapRowToCaso(row: Record<string, unknown>): Caso {
           flags: [],
           confianza_global: 0,
           confianza_campos: {},
+          modelo_ia: "pendiente",
+          campos_baja_confianza: [],
           orden_url: null,
           resumen: "Pendiente de análisis por IA.",
         } as ExtraccionIA),

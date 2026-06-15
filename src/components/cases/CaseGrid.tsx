@@ -12,6 +12,8 @@ interface CaseGridProps {
    * Lanzar throw para errores reales (network, auth).
    */
   onAsignar?: (casoId: string) => Promise<AssignCaseResult>;
+  /** Callback para refrescar la lista de casos desde el servidor */
+  onRefresh?: () => void;
 }
 
 function SkeletonCard() {
@@ -46,7 +48,7 @@ function EmptyState() {
   );
 }
 
-export function CaseGrid({ casos, isLoading = false, onCaseClick, onAsignar }: CaseGridProps) {
+export function CaseGrid({ casos, isLoading = false, onCaseClick, onAsignar, onRefresh }: CaseGridProps) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -68,7 +70,7 @@ export function CaseGrid({ casos, isLoading = false, onCaseClick, onAsignar }: C
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {casos.map((caso) => (
-        <CaseCard key={caso.id} caso={caso} onClick={onCaseClick} onAsignar={onAsignar} />
+        <CaseCard key={caso.id} caso={caso} onClick={onCaseClick} onAsignar={onAsignar} onRefresh={onRefresh} />
       ))}
     </div>
   );

@@ -218,7 +218,7 @@ export function DashboardPage() {
               </div>
             </div>
           ) : !error || casosFiltrados.length > 0 ? (
-            <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} onAsignar={handleAsignarCaso} />
+            <CaseGrid casos={casosFiltrados} onCaseClick={handleCaseClick} onAsignar={handleAsignarCaso} onRefresh={refresh} />
           ) : null}
 
           <CaseModal
