@@ -18,7 +18,9 @@ const { enviarMensajeCallbell } = await import("../callbell/messagesApi.js");
 function mockCallbellSuccess(messageId = "msg-uuid-123") {
   mockFetch.mockResolvedValue({
     ok: true,
-    json: async () => ({ message: { uuid: messageId } }),
+    status: 200,
+    statusText: "OK",
+    text: async () => JSON.stringify({ message: { uuid: messageId } }),
   });
 }
 
@@ -26,7 +28,8 @@ function mockCallbellError(status = 400, errorMsg = "Bad request") {
   mockFetch.mockResolvedValue({
     ok: false,
     status,
-    json: async () => ({ error: errorMsg }),
+    statusText: "Bad Request",
+    text: async () => JSON.stringify({ error: errorMsg }),
   });
 }
 
@@ -100,7 +103,7 @@ describe("enviarMensajeCallbell", () => {
   // Camino feliz
   // ---------------------------------------------------------
 
-  it("debe enviar mensaje exitosamente como reply en conversación existente", async () => {
+  it("debe enviar mensaje exitosamente y devolver messageId (siempre usa messages/send)", async () => {
     mockCallbellSuccess("msg-abc-456");
 
     const result = await enviarMensajeCallbell(
@@ -118,44 +121,18 @@ describe("enviarMensajeCallbell", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const callArgs = mockFetch.mock.calls[0] as [string, Record<string, unknown>];
 
-    // URL: debe usar endpoint de reply en conversación, NO messages/send
-    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/conversations/conv-uuid-789/messages");
+    // URL: siempre messages/send (endpoint único de Callbell)
+    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/messages/send");
 
     // Headers
     const options = callArgs[1] as { headers: Record<string, string>; body: string };
     expect(options.headers.Authorization).toBe("Bearer test-token-valid");
     expect(options.headers["Content-Type"]).toBe("application/json");
 
-    // Body: formato simple { text }, no el payload completo de messages/send
-    const body = JSON.parse(options.body) as { text: string };
-    expect(body.text).toBe("Hola, confirmamos tu turno");
-    expect((body as any).to).toBeUndefined();
-    expect((body as any).from).toBeUndefined();
-    expect((body as any).type).toBeUndefined();
-    expect((body as any).content).toBeUndefined();
-  });
-
-  it("debe usar messages/send cuando NO hay conversationUuid (nuevo mensaje outbound)", async () => {
-    mockCallbellSuccess("msg-outbound-123");
-
-    const result = await enviarMensajeCallbell("+542914001234", "Notificación a nuevo número");
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.messageId).toBe("msg-outbound-123");
-    }
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const callArgs = mockFetch.mock.calls[0] as [string, Record<string, unknown>];
-
-    // URL: debe usar messages/send
-    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/messages/send");
-
     // Body: payload completo de messages/send
-    const options = callArgs[1] as { body: string };
     const body = JSON.parse(options.body) as { to: string; content: { text: string }; type: string; from: string };
     expect(body.to).toBe("+542914001234");
-    expect(body.content.text).toBe("Notificación a nuevo número");
+    expect(body.content.text).toBe("Hola, confirmamos tu turno");
     expect(body.type).toBe("text");
     expect(body.from).toBe("whatsapp");
   });
@@ -163,7 +140,7 @@ describe("enviarMensajeCallbell", () => {
   it("debe devolver 'unknown' como messageId cuando la API no devuelve uuid", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ message: {} }),
+      text: async () => JSON.stringify({ message: {} }),
     });
 
     const result = await enviarMensajeCallbell("+542914001234", "Hola");
@@ -187,6 +164,45 @@ describe("enviarMensajeCallbell", () => {
     if (!result.success) {
       expect(result.error).toBe("Invalid phone number");
     }
+  });
+
+  it("debe devolver error cuando la respuesta no es JSON válido", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: async () => "", // Cuerpo vacío causa "Unexpected end of JSON input"
+    });
+
+    const result = await enviarMensajeCallbell("+542914001234", "Hola");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("Respuesta no-JSON");
+    }
+  });
+
+  it("debe loguear status y body antes de parsear JSON", async () => {
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    mockCallbellSuccess("log-test-ok");
+
+    await enviarMensajeCallbell("+542914001234", "Test logging");
+
+    // Verificar que se logueó status antes de parsear
+    const statusLog = consoleSpy.mock.calls.find(
+      (c) => c[0] === "[CALLBELL_API] Response status:",
+    );
+    expect(statusLog).toBeDefined();
+    expect(statusLog![1]).toBe(200);
+
+    // Verificar que se logueó el body como texto
+    const bodyLog = consoleSpy.mock.calls.find(
+      (c) => c[0] === "[CALLBELL_API] Response body:",
+    );
+    expect(bodyLog).toBeDefined();
+    expect(bodyLog![1]).toContain("log-test-ok");
+
+    consoleSpy.mockRestore();
   });
 
   it("debe reintentar 1 vez en error de red y luego fallar", async () => {
@@ -219,7 +235,6 @@ describe("enviarMensajeCallbell", () => {
   // ---------------------------------------------------------
 
   it("debe pasar AbortSignal a fetch (timeout 10s)", async () => {
-    // Mock que resuelve exitosamente para verificar el signal
     mockCallbellSuccess("timeout-test-ok");
 
     await enviarMensajeCallbell("+542914001234", "Hola");

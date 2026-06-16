@@ -2,15 +2,19 @@
 // messagesApi.ts
 // Servicio centralizado para la Callbell Messages API (REST).
 //
-// Responsabilidad: enviar mensajes de WhatsApp a través de
-// la API de Callbell. Este es el único punto de integración
-// con la API REST de Callbell (sender).
+// Endpoint único: POST /v1/messages/send
+//   https://docs.callbell.eu/api/reference/messages_api/post_send_messages/
 //
-// Endpoints:
-//   - Con conversación existente: POST /v1/conversations/{uuid}/messages
-//     (respeta política de 24hs de WhatsApp — reply en conversación)
-//   - Sin conversación: POST /v1/messages/send
-//     (nuevo mensaje outbound, para notificaciones a números nuevos)
+// Callbell asocia automáticamente el mensaje a la conversación
+// correcta usando el número de teléfono (to) + canal (from).
+// No existe un endpoint separado para replies en conversación.
+//
+// Política de 24hs de WhatsApp:
+//   - DENTRO de la ventana de 24hs: se puede responder con texto libre.
+//   - FUERA de la ventana: se requiere un Template Message aprobado
+//     (campo "template_uuid" en el body). Ver docs de Callbell.
+//   - Este servicio actualmente solo envía texto libre. Si se necesita
+//     enviar fuera de la ventana 24hs, implementar enviarTemplateCallbell().
 //
 // Auth: Bearer token via CALLBELL_API_TOKEN
 //
@@ -33,7 +37,7 @@ export type EnviarMensajeResult =
 
 /**
  * Respuesta esperada de la API de Callbell.
- * Compatible con ambos endpoints (conversation reply y messages/send).
+ * Basada en docs.callbell.eu
  */
 interface CallbellApiResponse {
   message?: {
@@ -46,8 +50,8 @@ interface CallbellApiResponse {
 // Constants
 // -----------------------------------------------------------
 
-/** URL base de la API de Callbell (versión 1) */
-const CALLBELL_API_BASE = "https://api.callbell.eu/v1";
+/** URL de la API de Callbell para enviar mensajes */
+const CALLBELL_API_URL = "https://api.callbell.eu/v1/messages/send";
 
 /** Timeout para la request a Callbell (10s) */
 const TIMEOUT_MS = 10_000;
@@ -83,17 +87,17 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Envía un mensaje de texto a través de la API de Callbell.
  *
- * - Si se provee `conversationUuid`: responde DENTRO de la conversación
- *   existente (POST /v1/conversations/{uuid}/messages). Esto respeta la
- *   política de 24hs de WhatsApp porque es un reply, no un mensaje nuevo.
- * - Si NO se provee: crea un mensaje nuevo outbound
- *   (POST /v1/messages/send). Solo para notificaciones a números sin
- *   conversación previa (ej: derivación a Chiclana).
+ * Usa siempre POST /v1/messages/send (endpoint único). Callbell asocia
+ * automáticamente el mensaje a la conversación existente usando el
+ * número de teléfono. El parámetro conversationUuid es solo para
+ * trazabilidad en logs — la API no lo recibe en el body.
+ *
+ * Para enviar fuera de la ventana de 24hs de WhatsApp, se necesita
+ * un Template Message (ver enviarTemplateCallbell — no implementado).
  *
  * @param phone - Número de teléfono del destinatario
  * @param message - Texto del mensaje a enviar
- * @param conversationUuid - UUID de la conversación en Callbell (obligatorio
- *        para replies dentro de conversación existente)
+ * @param conversationUuid - UUID de la conversación (solo para logging/trazabilidad)
  * @returns EnviarMensajeResult
  *
  * Logs estructurados obligatorios para trazabilidad.
@@ -108,7 +112,7 @@ export async function enviarMensajeCallbell(
     "[CALLBELL_API] Enviando mensaje — to:",
     phone,
     "conv:",
-    conversationUuid ?? "N/A (nuevo mensaje)",
+    conversationUuid ?? "N/A",
   );
 
   // Validar número de teléfono
@@ -125,28 +129,21 @@ export async function enviarMensajeCallbell(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      // Elegir endpoint según si tenemos conversación existente
-      let url: string;
-      let body: Record<string, unknown>;
+      // Endpoint único: POST /v1/messages/send
+      // Callbell asocia automáticamente a la conversación por número de teléfono.
+      // No existe un endpoint /conversations/:uuid/messages en la API de Callbell.
+      const body = {
+        to: phone,
+        from: "whatsapp",
+        type: "text",
+        content: {
+          text: message,
+        },
+      };
 
-      if (conversationUuid) {
-        // Reply dentro de conversación existente — respeta política 24hs
-        url = `${CALLBELL_API_BASE}/conversations/${conversationUuid}/messages`;
-        body = { text: message };
-        console.log("[CALLBELL_API] Usando endpoint reply en conversación:", conversationUuid);
-      } else {
-        // Nuevo mensaje outbound — para números sin conversación previa
-        url = `${CALLBELL_API_BASE}/messages/send`;
-        body = {
-          to: phone,
-          from: "whatsapp",
-          type: "text",
-          content: { text: message },
-        };
-        console.log("[CALLBELL_API] Usando endpoint nuevo mensaje outbound");
-      }
+      console.log("[CALLBELL_API] POST", CALLBELL_API_URL);
 
-      const response = await fetch(url, {
+      const response = await fetch(CALLBELL_API_URL, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -155,7 +152,26 @@ export async function enviarMensajeCallbell(
 
       clearTimeout(timeoutId);
 
-      const rawBody: CallbellApiResponse = await response.json();
+      // --- Logging diagnóstico: siempre loguear status antes de parsear ---
+      console.log(
+        "[CALLBELL_API] Response status:",
+        response.status,
+        response.statusText,
+      );
+
+      // Leer el body como texto primero (para diagnóstico si el JSON falla)
+      const responseText = await response.text();
+      console.log("[CALLBELL_API] Response body:", responseText);
+
+      // Parsear JSON manualmente desde el texto
+      let rawBody: CallbellApiResponse;
+      try {
+        rawBody = JSON.parse(responseText) as CallbellApiResponse;
+      } catch (parseErr) {
+        const errMsg = `Respuesta no-JSON de Callbell: ${responseText.slice(0, 200)}`;
+        console.error("[CALLBELL_API] Error parseando JSON:", parseErr);
+        return { success: false, error: errMsg };
+      }
 
       if (!response.ok) {
         const errMsg = rawBody?.error ?? `HTTP ${response.status}`;
