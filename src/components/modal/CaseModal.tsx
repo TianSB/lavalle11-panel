@@ -215,12 +215,21 @@ export function CaseModal({
   }, [caso, onCasoAsignar]);
 
   // --- Fetch adjuntos del caso cuando se abre el modal ---
+  // Busca en tabla adjuntos (Storage) y también en extraccion_ia.orden_url
   useEffect(() => {
     if (!caso || !isOpen) {
       setAdjuntosUrls([]);
       return;
     }
 
+    const urls: string[] = [];
+
+    // 1. Agregar orden_url de extraccion_ia si existe
+    if (caso.extraccion_ia.orden_url) {
+      urls.push(caso.extraccion_ia.orden_url);
+    }
+
+    // 2. Buscar adjuntos en la tabla adjuntos (Storage)
     supabase
       .from("adjuntos")
       .select("file_url")
@@ -229,11 +238,16 @@ export function CaseModal({
       .then(({ data, error }) => {
         if (error) {
           console.warn("[CASEMODAL] Error al obtener adjuntos:", error.message);
+          // Aún así mostrar los que tenemos de orden_url
+          if (urls.length > 0) setAdjuntosUrls(urls);
           return;
         }
-        const urls = (data ?? [])
-          .map((r) => r.file_url as string)
-          .filter(Boolean);
+        for (const row of data ?? []) {
+          const fu = row.file_url as string;
+          if (fu && !urls.includes(fu)) {
+            urls.push(fu);
+          }
+        }
         setAdjuntosUrls(urls);
       });
   }, [caso?.id, isOpen]);
