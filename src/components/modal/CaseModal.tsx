@@ -84,22 +84,16 @@ export function CaseModal({
 
   // --- Dialog states ---
   const [isClosing, setIsClosing] = useState(false);
-  const [isLlamada, setIsLlamada] = useState(false);
   const [isDerivar, setIsDerivar] = useState(false);
 
   // --- Loading states ---
   const [confirmarLoading, setConfirmarLoading] = useState(false);
   const [cerrarLoading, setCerrarLoading] = useState(false);
-  const [llamadaLoading, setLlamadaLoading] = useState(false);
   const [derivarLoading, setDerivarLoading] = useState(false);
-
 
   // --- Close dialog state ---
   const [selectedClosingReason, setSelectedClosingReason] = useState<string>("");
   const [closeNota, setCloseNota] = useState("");
-
-  // --- Llamada dialog state ---
-  const [llamadaDuracion, setLlamadaDuracion] = useState(5);
 
   // --- Derivar dialog state ---
   const [derivarNotas, setDerivarNotas] = useState("");
@@ -115,15 +109,12 @@ export function CaseModal({
     setSeguimientoNota("");
     setSeguimientoFecha("");
     setIsClosing(false);
-    setIsLlamada(false);
     setIsDerivar(false);
     setConfirmarLoading(false);
     setCerrarLoading(false);
-    setLlamadaLoading(false);
     setDerivarLoading(false);
     setSelectedClosingReason("");
     setCloseNota("");
-    setLlamadaDuracion(5);
     setDerivarNotas("");
   }
 
@@ -187,29 +178,6 @@ export function CaseModal({
       setCerrarLoading(false);
     }
   }, [caso, selectedClosingReason, closeNota, userId, onRefresh, onClose]);
-
-  // --- Registrar llamada ---
-  const handleRegistrarLlamada = useCallback(async () => {
-    if (!caso) return;
-    setLlamadaLoading(true);
-    try {
-      const res = await apiPost(`/api/casos/${caso.id}/llamada`, {
-        duracion_min: llamadaDuracion,
-        asesorId: userId,
-      });
-      if (res.ok) {
-        showToast(`Llamada registrada (${llamadaDuracion} min)`, "success");
-        setIsLlamada(false);
-        onRefresh?.();
-      } else {
-        showToast(`Error al registrar llamada: ${res.error}`, "error");
-      }
-    } catch {
-      showToast("Error de conexión al registrar llamada", "error");
-    } finally {
-      setLlamadaLoading(false);
-    }
-  }, [caso, llamadaDuracion, userId, onRefresh]);
 
   // --- Derivar a Chiclana ---
   const handleDerivar = useCallback(async () => {
@@ -351,11 +319,6 @@ export function CaseModal({
                   Cerrar caso
                 </Button>
 
-                {/* Registrar llamada */}
-                <Button variant="secondary" size="sm" onClick={() => setIsLlamada(true)} disabled={llamadaLoading}>
-                  Registrar llamada
-                </Button>
-
                 {/* Derivar a Chiclana (solo si práctica nuclear) */}
                 {esNuclear && (
                   <Button variant="secondary" size="sm" onClick={() => setIsDerivar(true)} disabled={derivarLoading}>
@@ -432,37 +395,6 @@ export function CaseModal({
                 disabled={!selectedClosingReason || cerrarLoading}
               >
                 {cerrarLoading ? "Cerrando..." : "Cerrar caso"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================ */}
-      {/* Modal: Registrar llamada */}
-      {/* ================================================================ */}
-      {isLlamada && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={() => setIsLlamada(false)} />
-          <div className="relative z-10 mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">Registrar llamada</h3>
-
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Duración (minutos)</p>
-            <input
-              type="number"
-              min={0}
-              max={120}
-              value={llamadaDuracion}
-              onChange={(e) => setLlamadaDuracion(Math.max(0, parseInt(e.target.value) || 0))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mb-4"
-            />
-
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setIsLlamada(false)}>
-                Cancelar
-              </Button>
-              <Button variant="primary" onClick={handleRegistrarLlamada} disabled={llamadaLoading}>
-                {llamadaLoading ? "Registrando..." : "Registrar llamada"}
               </Button>
             </div>
           </div>
