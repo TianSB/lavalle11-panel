@@ -4,6 +4,14 @@
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [
+    { "source": "/api/casos/:id/re-analizar", "destination": "/api/casos/[id]/re-analizar" },
+    { "source": "/api/casos/:id/confirmar", "destination": "/api/casos/[id]/confirmar" },
+    { "source": "/api/casos/:id/cerrar", "destination": "/api/casos/[id]/cerrar" },
+    { "source": "/api/casos/:id/llamada", "destination": "/api/casos/[id]/llamada" },
+    { "source": "/api/casos/:id/derivar", "destination": "/api/casos/[id]/derivar" },
+    { "source": "/api/casos/:id/enviar-mensaje", "destination": "/api/casos/[id]/enviar-mensaje" },
+    { "source": "/api/casos/:id", "destination": "/api/casos/[id]" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
+
