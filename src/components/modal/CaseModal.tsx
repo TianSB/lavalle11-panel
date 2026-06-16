@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { Caso, Sede, Instruccion } from "../../types";
+import { supabase } from "../../lib/supabase";
 import { Modal } from "../ui/Modal";
 import { FlagBadge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -91,6 +92,9 @@ export function CaseModal({
   const [cerrarLoading, setCerrarLoading] = useState(false);
   const [derivarLoading, setDerivarLoading] = useState(false);
 
+  // --- Adjuntos state (para botón Ver orden médica) ---
+  const [adjuntosUrls, setAdjuntosUrls] = useState<string[]>([]);
+
   // --- Close dialog state ---
   const [selectedClosingReason, setSelectedClosingReason] = useState<string>("");
   const [closeNota, setCloseNota] = useState("");
@@ -113,6 +117,7 @@ export function CaseModal({
     setConfirmarLoading(false);
     setCerrarLoading(false);
     setDerivarLoading(false);
+    setAdjuntosUrls([]);
     setSelectedClosingReason("");
     setCloseNota("");
     setDerivarNotas("");
@@ -209,6 +214,30 @@ export function CaseModal({
     onCasoAsignar(caso.id);
   }, [caso, onCasoAsignar]);
 
+  // --- Fetch adjuntos del caso cuando se abre el modal ---
+  useEffect(() => {
+    if (!caso || !isOpen) {
+      setAdjuntosUrls([]);
+      return;
+    }
+
+    supabase
+      .from("adjuntos")
+      .select("file_url")
+      .eq("caso_id", caso.id)
+      .limit(5)
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn("[CASEMODAL] Error al obtener adjuntos:", error.message);
+          return;
+        }
+        const urls = (data ?? [])
+          .map((r) => r.file_url as string)
+          .filter(Boolean);
+        setAdjuntosUrls(urls);
+      });
+  }, [caso?.id, isOpen]);
+
   if (!caso) return null;
 
   const isPendiente = caso.asesor_id === null;
@@ -261,6 +290,29 @@ export function CaseModal({
             <div className="flex flex-wrap gap-1.5">
               {caso.extraccion_ia.flags.map((flag) => (
                 <FlagBadge key={flag} flag={flag} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ver orden médica */}
+        {adjuntosUrls.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Orden médica</p>
+            <div className="flex flex-wrap gap-2">
+              {adjuntosUrls.map((url, i) => (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Ver orden {adjuntosUrls.length > 1 ? `${i + 1}` : ""}
+                </a>
               ))}
             </div>
           </div>

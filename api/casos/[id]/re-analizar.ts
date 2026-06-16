@@ -110,11 +110,14 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    // --- 2b. Obtener adjuntos asociados al caso ---
+    // --- 2b. Obtener adjuntos del Storage (URLs permanentes, no expiran) ---
+    // Solo los que no han sido procesados aún por IA
     const { data: adjuntosRaw, error: adjError } = await supabase
       .from("adjuntos")
       .select("file_url, file_type, file_name")
-      .eq("caso_id", id);
+      .eq("caso_id", id)
+      .eq("processed_by_ia", false)
+      .order("created_at", { ascending: true });
 
     if (adjError) {
       console.warn("[RE-ANALIZAR] Error al obtener adjuntos:", adjError.message);
@@ -145,7 +148,8 @@ export default async function handler(req: any, res: any) {
         };
       });
 
-    // Si no hay adjuntos en la tabla adjuntos, intentar desde la URL de orden en extracciones_ia
+    // Si no hay adjuntos en Storage, intentar desde la URL de orden en extracciones_ia
+    // (casos anteriores a la implementación de Storage)
     const extraccion = caso.extracciones_ia as Record<string, unknown> | null;
     const ordenUrl = extraccion?.orden_url as string | null;
     if (adjuntosCanonicos.length === 0 && ordenUrl) {
@@ -242,6 +246,19 @@ export default async function handler(req: any, res: any) {
     if (updateCasoError) {
       console.warn("[RE-ANALIZAR] Error al actualizar tipo_caso:", updateCasoError.message);
       // No bloqueante
+    }
+
+    // --- 8. Marcar adjuntos como procesados por IA (no bloqueante) ---
+    if (adjuntosRaw && adjuntosRaw.length > 0) {
+      supabase
+        .from("adjuntos")
+        .update({ processed_by_ia: true })
+        .eq("caso_id", id)
+        .then(({ error: markError }) => {
+          if (markError) {
+            console.warn("[RE-ANALIZAR] Error al marcar adjuntos como procesados:", markError.message);
+          }
+        });
     }
 
     console.log("[RE-ANALIZAR] Re-análisis completado OK — caso:", id);

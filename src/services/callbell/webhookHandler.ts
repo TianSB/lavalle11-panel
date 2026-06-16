@@ -14,6 +14,7 @@ import type { ParsedPayload } from "./types.js";
 import type { AdjuntoCanónico, EntradaCanónica, RespuestaCanónica } from "../ai/types.js";
 import { getAIProvider } from "../ai/aiFactory.js";
 import { parsePayload, validatePayload } from "./payloadParser.js";
+import { guardarAdjuntoEnStorage } from "../storage/adjuntosStorage.js";
 import {
   findByCallbellUuid,
   createCaso,
@@ -23,6 +24,71 @@ import {
   actualizarExtraccionIA,
   assignCaso,
 } from "../supabase/casoService.js";
+
+// -----------------------------------------------------------
+// Storage helper
+// -----------------------------------------------------------
+
+/**
+ * Guarda los adjuntos de un mensaje en Supabase Storage y
+ * registra las URLs permanentes en la tabla adjuntos.
+ * No bloqueante — errores se loggean y se ignoran.
+ */
+async function saveAttachmentsToStorage(
+  supabase: SupabaseClient,
+  attachments: { url: string; content_type: string | null; file_name: string | null }[],
+  casoId: string,
+  mensajeUuid: string,
+): Promise<void> {
+  if (!attachments || attachments.length === 0) return;
+
+  for (let i = 0; i < attachments.length; i++) {
+    const att = attachments[i]!;
+    if (!att || !att.url) continue;
+
+    // Guardar en Storage
+    const urlPermanente = await guardarAdjuntoEnStorage(
+      supabase,
+      att.url,
+      casoId,
+      mensajeUuid,
+      i,
+    );
+
+    if (!urlPermanente) {
+      console.warn("[WEBHOOK] No se pudo guardar adjunto en Storage — continuando");
+      continue;
+    }
+
+    // Insertar registro en la tabla adjuntos con URL permanente
+    const { error: insertError } = await supabase
+      .from("adjuntos")
+      .insert({
+        caso_id: casoId,
+        file_url: urlPermanente,
+        file_type: att.content_type ?? "image/jpeg",
+        file_name: att.file_name ?? `orden_${i + 1}.jpg`,
+        mensaje_id: mensajeUuid,
+        processed_by_ia: false,
+      });
+
+    if (insertError) {
+      console.warn(
+        "[WEBHOOK] Error al insertar adjunto en BD:",
+        insertError.message,
+        "— URL permanente:",
+        urlPermanente,
+      );
+    } else {
+      console.log(
+        "[WEBHOOK] Adjunto guardado en Storage y registrado — caso:",
+        casoId,
+        "url:",
+        urlPermanente,
+      );
+    }
+  }
+}
 
 // -----------------------------------------------------------
 // Types
@@ -147,6 +213,16 @@ async function handleMessageCreated(
       console.error("[STEP 7.ERR] Error al actualizar historial del caso", existingCaso.id);
     }
 
+    // Guardar adjuntos del nuevo mensaje en Storage (no bloqueante)
+    if (message.attachments && message.attachments.length > 0) {
+      saveAttachmentsToStorage(
+        supabase,
+        message.attachments,
+        existingCaso.id,
+        message.callbell_uuid,
+      ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+    }
+
     console.log("[STEP 8] Fin exitoso — caso existente actualizado:", existingCaso.id);
     return {
       status: 200,
@@ -209,6 +285,16 @@ async function handleMessageCreated(
       await actualizarExtraccionIA(supabase, existingCaso.id, analisisIA, parsed);
     }
 
+    // Guardar adjuntos del nuevo mensaje en Storage (no bloqueante)
+    if (message.attachments && message.attachments.length > 0) {
+      saveAttachmentsToStorage(
+        supabase,
+        message.attachments,
+        existingCaso.id,
+        message.callbell_uuid,
+      ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+    }
+
     console.log("[STEP 8] Fin exitoso — caso reabierto:", existingCaso.id);
     return {
       status: 200,
@@ -262,6 +348,17 @@ async function handleMessageCreated(
   }
 
   console.log("[STEP 6] Resultado createCaso — caso creado:", nuevoCaso.id);
+
+  // Guardar adjuntos del mensaje en Storage (no bloqueante)
+  if (message.attachments && message.attachments.length > 0) {
+    saveAttachmentsToStorage(
+      supabase,
+      message.attachments,
+      nuevoCaso.id,
+      message.callbell_uuid,
+    ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+  }
+
   console.log("[STEP 8] Fin exitoso — nuevo caso creado:", nuevoCaso.id);
 
   return {
