@@ -100,7 +100,7 @@ describe("enviarMensajeCallbell", () => {
   // Camino feliz
   // ---------------------------------------------------------
 
-  it("debe enviar mensaje exitosamente y devolver messageId", async () => {
+  it("debe enviar mensaje exitosamente como reply en conversación existente", async () => {
     mockCallbellSuccess("msg-abc-456");
 
     const result = await enviarMensajeCallbell(
@@ -118,18 +118,44 @@ describe("enviarMensajeCallbell", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const callArgs = mockFetch.mock.calls[0] as [string, Record<string, unknown>];
 
-    // URL
-    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/messages/send");
+    // URL: debe usar endpoint de reply en conversación, NO messages/send
+    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/conversations/conv-uuid-789/messages");
 
     // Headers
     const options = callArgs[1] as { headers: Record<string, string>; body: string };
     expect(options.headers.Authorization).toBe("Bearer test-token-valid");
     expect(options.headers["Content-Type"]).toBe("application/json");
 
-    // Body
+    // Body: formato simple { text }, no el payload completo de messages/send
+    const body = JSON.parse(options.body) as { text: string };
+    expect(body.text).toBe("Hola, confirmamos tu turno");
+    expect((body as any).to).toBeUndefined();
+    expect((body as any).from).toBeUndefined();
+    expect((body as any).type).toBeUndefined();
+    expect((body as any).content).toBeUndefined();
+  });
+
+  it("debe usar messages/send cuando NO hay conversationUuid (nuevo mensaje outbound)", async () => {
+    mockCallbellSuccess("msg-outbound-123");
+
+    const result = await enviarMensajeCallbell("+542914001234", "Notificación a nuevo número");
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.messageId).toBe("msg-outbound-123");
+    }
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const callArgs = mockFetch.mock.calls[0] as [string, Record<string, unknown>];
+
+    // URL: debe usar messages/send
+    expect(callArgs[0]).toBe("https://api.callbell.eu/v1/messages/send");
+
+    // Body: payload completo de messages/send
+    const options = callArgs[1] as { body: string };
     const body = JSON.parse(options.body) as { to: string; content: { text: string }; type: string; from: string };
     expect(body.to).toBe("+542914001234");
-    expect(body.content.text).toBe("Hola, confirmamos tu turno");
+    expect(body.content.text).toBe("Notificación a nuevo número");
     expect(body.type).toBe("text");
     expect(body.from).toBe("whatsapp");
   });

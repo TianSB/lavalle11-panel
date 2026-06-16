@@ -6,7 +6,12 @@
 // la API de Callbell. Este es el único punto de integración
 // con la API REST de Callbell (sender).
 //
-// Endpoint: POST https://api.callbell.eu/v1/messages/send
+// Endpoints:
+//   - Con conversación existente: POST /v1/conversations/{uuid}/messages
+//     (respeta política de 24hs de WhatsApp — reply en conversación)
+//   - Sin conversación: POST /v1/messages/send
+//     (nuevo mensaje outbound, para notificaciones a números nuevos)
+//
 // Auth: Bearer token via CALLBELL_API_TOKEN
 //
 // Todos los endpoints serverless y servicios de negocio
@@ -28,7 +33,7 @@ export type EnviarMensajeResult =
 
 /**
  * Respuesta esperada de la API de Callbell.
- * Basada en docs.callbell.eu
+ * Compatible con ambos endpoints (conversation reply y messages/send).
  */
 interface CallbellApiResponse {
   message?: {
@@ -42,7 +47,7 @@ interface CallbellApiResponse {
 // -----------------------------------------------------------
 
 /** URL base de la API de Callbell (versión 1) */
-const CALLBELL_API_URL = "https://api.callbell.eu/v1/messages/send";
+const CALLBELL_API_BASE = "https://api.callbell.eu/v1";
 
 /** Timeout para la request a Callbell (10s) */
 const TIMEOUT_MS = 10_000;
@@ -78,9 +83,17 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Envía un mensaje de texto a través de la API de Callbell.
  *
- * @param phone - Número de teléfono del destinatario (con código de país, ej: +542914001234)
+ * - Si se provee `conversationUuid`: responde DENTRO de la conversación
+ *   existente (POST /v1/conversations/{uuid}/messages). Esto respeta la
+ *   política de 24hs de WhatsApp porque es un reply, no un mensaje nuevo.
+ * - Si NO se provee: crea un mensaje nuevo outbound
+ *   (POST /v1/messages/send). Solo para notificaciones a números sin
+ *   conversación previa (ej: derivación a Chiclana).
+ *
+ * @param phone - Número de teléfono del destinatario
  * @param message - Texto del mensaje a enviar
- * @param conversationUuid - UUID de la conversación en Callbell (opcional, para trazabilidad)
+ * @param conversationUuid - UUID de la conversación en Callbell (obligatorio
+ *        para replies dentro de conversación existente)
  * @returns EnviarMensajeResult
  *
  * Logs estructurados obligatorios para trazabilidad.
@@ -91,7 +104,12 @@ export async function enviarMensajeCallbell(
   message: string,
   conversationUuid?: string,
 ): Promise<EnviarMensajeResult> {
-  console.log("[CALLBELL_API] Enviando mensaje — to:", phone, "conv:", conversationUuid ?? "N/A");
+  console.log(
+    "[CALLBELL_API] Enviando mensaje — to:",
+    phone,
+    "conv:",
+    conversationUuid ?? "N/A (nuevo mensaje)",
+  );
 
   // Validar número de teléfono
   // Acepta formato internacional (+549291...) y formato Callbell (549291...)
@@ -107,17 +125,31 @@ export async function enviarMensajeCallbell(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-      const response = await fetch(CALLBELL_API_URL, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
+      // Elegir endpoint según si tenemos conversación existente
+      let url: string;
+      let body: Record<string, unknown>;
+
+      if (conversationUuid) {
+        // Reply dentro de conversación existente — respeta política 24hs
+        url = `${CALLBELL_API_BASE}/conversations/${conversationUuid}/messages`;
+        body = { text: message };
+        console.log("[CALLBELL_API] Usando endpoint reply en conversación:", conversationUuid);
+      } else {
+        // Nuevo mensaje outbound — para números sin conversación previa
+        url = `${CALLBELL_API_BASE}/messages/send`;
+        body = {
           to: phone,
           from: "whatsapp",
           type: "text",
-          content: {
-            text: message,
-          },
-        }),
+          content: { text: message },
+        };
+        console.log("[CALLBELL_API] Usando endpoint nuevo mensaje outbound");
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
