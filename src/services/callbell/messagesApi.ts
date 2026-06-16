@@ -94,7 +94,8 @@ export async function enviarMensajeCallbell(
   console.log("[CALLBELL_API] Enviando mensaje — to:", phone, "conv:", conversationUuid ?? "N/A");
 
   // Validar número de teléfono
-  if (!phone || !phone.startsWith("+")) {
+  // Acepta formato internacional (+549291...) y formato Callbell (549291...)
+  if (!phone || (!phone.startsWith("+") && !/^549\d{10,11}$/.test(phone))) {
     const errMsg = `Número de teléfono inválido: ${phone}`;
     console.error("[CALLBELL_API] Error:", errMsg);
     return { success: false, error: errMsg };

@@ -52,14 +52,26 @@ describe("enviarMensajeCallbell", () => {
   // Validación de entrada
   // ---------------------------------------------------------
 
-  it("debe rechazar número sin prefijo +", async () => {
-    const result = await enviarMensajeCallbell("542914001234", "Hola");
+  it("debe rechazar número sin prefijo + y sin formato 549", async () => {
+    const result = await enviarMensajeCallbell("12345", "Hola");
 
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toContain("inválido");
     }
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("debe aceptar número argentino sin prefijo + (formato Callbell)", async () => {
+    mockCallbellSuccess("msg-549-ok");
+
+    const result = await enviarMensajeCallbell("5492915018723", "Hola");
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.messageId).toBe("msg-549-ok");
+    }
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it("debe rechazar número vacío", async () => {
