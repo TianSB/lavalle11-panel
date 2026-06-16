@@ -44,6 +44,7 @@ function mockCallbellNetworkError() {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CALLBELL_API_TOKEN = "test-token-valid";
+  process.env.CALLBELL_CHANNEL_UUID = "test-channel-uuid";
 });
 
 // -----------------------------------------------------------
@@ -65,7 +66,7 @@ describe("enviarMensajeCallbell", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("debe aceptar número argentino sin prefijo + (formato Callbell)", async () => {
+  it("debe aceptar número argentino sin prefijo + y agregarle + automáticamente", async () => {
     mockCallbellSuccess("msg-549-ok");
 
     const result = await enviarMensajeCallbell("5492915018723", "Hola");
@@ -75,6 +76,12 @@ describe("enviarMensajeCallbell", () => {
       expect(result.messageId).toBe("msg-549-ok");
     }
     expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    // Verificar que el to se envía CON + aunque se haya pasado sin +
+    const callArgs = mockFetch.mock.calls[0] as [string, Record<string, unknown>];
+    const options = callArgs[1] as { body: string };
+    const body = JSON.parse(options.body) as { to: string };
+    expect(body.to).toBe("+5492915018723");
   });
 
   it("debe rechazar número vacío", async () => {
@@ -95,6 +102,18 @@ describe("enviarMensajeCallbell", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toContain("no configurado");
+    }
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("debe rechazar cuando CALLBELL_CHANNEL_UUID no está configurado", async () => {
+    delete process.env.CALLBELL_CHANNEL_UUID;
+
+    const result = await enviarMensajeCallbell("+542914001234", "Hola");
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("CALLBELL_CHANNEL_UUID");
     }
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -129,12 +148,19 @@ describe("enviarMensajeCallbell", () => {
     expect(options.headers.Authorization).toBe("Bearer test-token-valid");
     expect(options.headers["Content-Type"]).toBe("application/json");
 
-    // Body: payload completo de messages/send
-    const body = JSON.parse(options.body) as { to: string; content: { text: string }; type: string; from: string };
+    // Body: payload completo de messages/send con channel_uuid
+    const body = JSON.parse(options.body) as {
+      to: string;
+      content: { text: string };
+      type: string;
+      from: string;
+      channel_uuid: string;
+    };
     expect(body.to).toBe("+542914001234");
     expect(body.content.text).toBe("Hola, confirmamos tu turno");
     expect(body.type).toBe("text");
     expect(body.from).toBe("whatsapp");
+    expect(body.channel_uuid).toBe("test-channel-uuid");
   });
 
   it("debe devolver 'unknown' como messageId cuando la API no devuelve uuid", async () => {

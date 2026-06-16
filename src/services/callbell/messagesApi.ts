@@ -129,13 +129,29 @@ export async function enviarMensajeCallbell(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+      // --- Obtener channel_uuid (qué canal de WhatsApp usar) ---
+      // Callbell requiere channel_uuid para asociar el mensaje a la
+      // conversación existente. Sin este campo, Callbell crea una
+      // conversación nueva duplicada.
+      const channelUuid = process.env.CALLBELL_CHANNEL_UUID;
+      if (!channelUuid) {
+        const errMsg = "[CALLBELL_API] CALLBELL_CHANNEL_UUID no configurado";
+        console.error(errMsg);
+        return { success: false, error: errMsg };
+      }
+
+      // --- Asegurar que el teléfono tenga prefijo + ---
+      // Los números en la DB están sin +, pero Callbell los espera con +
+      const phoneWithPrefix = phone.startsWith("+") ? phone : `+${phone}`;
+
       // Endpoint único: POST /v1/messages/send
-      // Callbell asocia automáticamente a la conversación por número de teléfono.
-      // No existe un endpoint /conversations/:uuid/messages en la API de Callbell.
+      // El campo channel_uuid es obligatorio para que Callbell asocie
+      // el mensaje a la conversación existente del canal correcto.
       const body = {
-        to: phone,
+        to: phoneWithPrefix,
         from: "whatsapp",
         type: "text",
+        channel_uuid: channelUuid,
         content: {
           text: message,
         },
