@@ -98,10 +98,9 @@ function AssignOverlay({ status }: { status: CaseUIStatus | undefined }) {
 // ============================================================
 
 function AnalizarButton({ casoId, onRefresh }: { casoId: string; onRefresh?: () => void }) {
-  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+  const [state, setState] = useState<"idle" | "confirming" | "loading" | "error">("idle");
 
-  const handleClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleConfirm = async () => {
     setState("loading");
     try {
       const res = await fetch(`/api/casos/${casoId}/re-analizar`, {
@@ -119,6 +118,11 @@ function AnalizarButton({ casoId, onRefresh }: { casoId: string; onRefresh?: () 
     } catch {
       setState("error");
     }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setState("confirming");
   };
 
   if (state === "loading") {
@@ -155,10 +159,32 @@ function AnalizarButton({ casoId, onRefresh }: { casoId: string; onRefresh?: () 
     );
   }
 
+  if (state === "confirming") {
+    return (
+      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <span className="text-xs text-amber-700 font-medium whitespace-nowrap">
+          ¿Re-analizar con IA?
+        </span>
+        <button
+          onClick={handleConfirm}
+          className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 transition-all hover:bg-amber-100 hover:border-amber-400"
+        >
+          Sí, analizar
+        </button>
+        <button
+          onClick={() => setState("idle")}
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-600 transition-all hover:bg-gray-50"
+        >
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <button
       onClick={handleClick}
-      title="Analizar con IA"
+      title="Analizar con IA — consume crédito de API"
       className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-all hover:bg-blue-100 hover:border-blue-300"
     >
       <span className="flex items-center justify-center gap-2">
@@ -236,6 +262,16 @@ export function CaseCard({ caso, onClick, onAsignar, onRefresh }: CaseCardProps)
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 {caso.mensajes_count}
+              </span>
+            )}
+            {/* Adjuntos pendientes badge */}
+            {caso.adjuntos_pendientes > 0 && (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200"
+                title={`${caso.adjuntos_pendientes} adjunto(s) pendiente(s) de analizar por IA`}
+              >
+                📎
+                {caso.adjuntos_pendientes}
               </span>
             )}
             <Badge color="purple" size="sm">{`Tipo ${caso.tipo_caso}`}</Badge>

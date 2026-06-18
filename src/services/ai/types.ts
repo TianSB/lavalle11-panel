@@ -91,7 +91,7 @@ export interface RespuestaCanónica {
 // --- Contrato del adapter ---
 
 export interface AIProvider {
-  analizarCaso(entrada: EntradaCanónica): Promise<RespuestaCanónica>;
+  analizarCaso(entrada: EntradaCanónica, opciones?: { maxTokens?: number }): Promise<RespuestaCanónica>;
   nombre: string;   // "claude", "mock", etc. — para logging
 }
 

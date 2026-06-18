@@ -14,111 +14,48 @@ import type {
   VolumenDiario,
   MetricaPorAsesor,
   TipoCaso,
-  EstadoCaso,
-  Prioridad,
-  Flag,
-  Turno,
-  Llamada,
-  ExtraccionIA,
-  ClosingReason,
 } from "../types";
 import type { CasoService } from "./mockService";
 import { TIPOS_CASO } from "../constants";
 import type { AssignCaseResult } from "./errors";
 import { ErrorCodes, AppError } from "./errors";
 import { enviarMensajeCallbell } from "./callbell/messagesApi.js";
+import { mapRowToCaso, CASOS_SELECT } from "../utils/mappers.js";
 
 // -----------------------------------------------------------
 // Mapping helpers
 // -----------------------------------------------------------
 
+// mapRowToCaso y CASOS_COMPLETO_SELECT ahora viven en src/utils/mappers.ts
+// Importados arriba. Single source of truth.
+
+// CASOS_SELECT ahora en src/utils/mappers.ts
+
 /**
- * Maps a raw Supabase row (casos + extracciones_ia + turnos + llamadas)
- * into the frontend Caso type.
+ * Para un set de caso_ids, obtiene el conteo de adjuntos sin procesar por IA.
+ * Retorna un Map<caso_id, count>.
  */
-function mapRowToCaso(row: Record<string, unknown>): Caso {
-  const extraccion = row.extracciones_ia as Record<string, unknown> | null;
+async function fetchAdjuntosPendientesCounts(casoIds: string[]): Promise<Map<string, number>> {
+  if (casoIds.length === 0) return new Map();
 
-  return {
-    id: row.id as string,
-    callbell_uuid: row.callbell_conversation_uuid as string,
-    contact_phone: row.contact_phone as string,
-    contact_name: row.contact_name as string,
-    tipo_caso: row.tipo_caso as TipoCaso,
-    estado: row.estado as EstadoCaso,
-    prioridad: row.prioridad as Prioridad,
-    asesor_id: (row.asesor_id as string) ?? null,
-    asesor_nombre: (row.asesor as Record<string, unknown> | null)?.nombre as string ?? null,
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-    resolved_at: (row.resolved_at as string) ?? null,
-    closing_reason: (row.closing_reason as ClosingReason) ?? null,
-    seguimiento_fecha: null,
-    seguimiento_nota: null,
-    extraccion_ia: extraccion
-      ? ({
-          paciente_nombre: extraccion.paciente_nombre as string,
-          paciente_dni: (extraccion.paciente_dni as string) ?? null,
-          obra_social: (extraccion.obra_social as string) ?? null,
-          nro_afiliado: (extraccion.nro_afiliado as string) ?? null,
-          nro_carnet: (extraccion.nro_carnet as string) ?? null,
-          practica: extraccion.practica as string,
-          tipo_practica: extraccion.tipo_practica as ExtraccionIA["tipo_practica"],
-          medico_derivante: (extraccion.medico_derivante as string) ?? null,
-          matricula: (extraccion.matricula as string) ?? null,
-          diagnostico: (extraccion.diagnostico as string) ?? null,
-          motivo_solicitud: (extraccion.motivo_solicitud as string) ?? null,
-          requiere_copago: (extraccion.requiere_copago as boolean) ?? false,
-          requiere_llamada: (extraccion.requiere_llamada as boolean) ?? false,
-          requiere_autorizacion: (extraccion.requiere_autorizacion as boolean) ?? false,
-          flags: (extraccion.flags as Flag[]) ?? [],
-          confianza_global: (extraccion.confianza_global as number) ?? 0,
-          confianza_campos: (extraccion.confianza_campos as Record<string, number>) ?? {},
-          modelo_ia: (extraccion.modelo_ia as string) ?? "pendiente",
-          campos_baja_confianza: (extraccion.campos_baja_confianza as string[]) ?? [],
-          orden_url: (extraccion.orden_url as string) ?? null,
-          resumen: extraccion.resumen as string,
-        } as ExtraccionIA)
-      : ({
-          paciente_nombre: row.contact_name as string,
-          paciente_dni: null,
-          obra_social: null,
-          nro_afiliado: null,
-          nro_carnet: null,
-          practica: "Pendiente de análisis",
-          tipo_practica: "otro",
-          medico_derivante: null,
-          matricula: null,
-          diagnostico: null,
-          motivo_solicitud: null,
-          requiere_copago: false,
-          requiere_llamada: false,
-          requiere_autorizacion: false,
-          flags: [],
-          confianza_global: 0,
-          confianza_campos: {},
-          modelo_ia: "pendiente",
-          campos_baja_confianza: [],
-          orden_url: null,
-          resumen: "Pendiente de análisis por IA.",
-        } as ExtraccionIA),
-    turnos: (row.turnos as Turno[]) ?? [],
-    llamadas: (row.llamadas as Llamada[]) ?? [],
-    mensajes_count: 0, // Se reemplaza después con fetchMensajesCounts
-  };
+  const { data, error } = await supabase
+    .from("adjuntos")
+    .select("caso_id")
+    .in("caso_id", casoIds)
+    .eq("processed_by_ia", false);
+
+  if (error) {
+    console.warn("[SUPABASE_SERVICE] Error al obtener conteo de adjuntos pendientes:", error.message);
+    return new Map();
+  }
+
+  const countMap = new Map<string, number>();
+  for (const row of data ?? []) {
+    const cid = row.caso_id as string;
+    countMap.set(cid, (countMap.get(cid) ?? 0) + 1);
+  }
+  return countMap;
 }
-
-// -----------------------------------------------------------
-// Base query — reusable select pattern for casos list queries
-// -----------------------------------------------------------
-
-const CASOS_SELECT = `
-  *,
-  extracciones_ia (*),
-  turnos (*),
-  llamadas (*),
-  asesor:asesor_id (nombre)
-` as const;
 
 /**
  * Para un set de caso_ids, obtiene el conteo de mensajes entrantes por caso.
@@ -167,11 +104,15 @@ export const supabaseCasoService: CasoService = {
 
     const casos = (data ?? []).map(mapRowToCaso);
 
-    // Batch fetch message counts for all casos
+    // Batch fetch counts for all casos
     const casoIds = casos.map((c) => c.id);
-    const countsMap = await fetchMensajesCounts(casoIds);
+    const [mensajesMap, adjuntosMap] = await Promise.all([
+      fetchMensajesCounts(casoIds),
+      fetchAdjuntosPendientesCounts(casoIds),
+    ]);
     for (const caso of casos) {
-      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+      caso.mensajes_count = mensajesMap.get(caso.id) ?? 0;
+      caso.adjuntos_pendientes = adjuntosMap.get(caso.id) ?? 0;
     }
 
     return casos;
@@ -195,9 +136,13 @@ export const supabaseCasoService: CasoService = {
     const casos = (data ?? []).map(mapRowToCaso);
 
     const casoIds = casos.map((c) => c.id);
-    const countsMap = await fetchMensajesCounts(casoIds);
+    const [mensajesMap, adjuntosMap] = await Promise.all([
+      fetchMensajesCounts(casoIds),
+      fetchAdjuntosPendientesCounts(casoIds),
+    ]);
     for (const caso of casos) {
-      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+      caso.mensajes_count = mensajesMap.get(caso.id) ?? 0;
+      caso.adjuntos_pendientes = adjuntosMap.get(caso.id) ?? 0;
     }
 
     return casos;
@@ -237,9 +182,13 @@ export const supabaseCasoService: CasoService = {
     const casos = (data ?? []).map(mapRowToCaso);
 
     const ids = casos.map((c) => c.id);
-    const countsMap = await fetchMensajesCounts(ids);
+    const [mensajesMap, adjuntosMap] = await Promise.all([
+      fetchMensajesCounts(ids),
+      fetchAdjuntosPendientesCounts(ids),
+    ]);
     for (const caso of casos) {
-      caso.mensajes_count = countsMap.get(caso.id) ?? 0;
+      caso.mensajes_count = mensajesMap.get(caso.id) ?? 0;
+      caso.adjuntos_pendientes = adjuntosMap.get(caso.id) ?? 0;
     }
 
     return casos;

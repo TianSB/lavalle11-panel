@@ -205,7 +205,7 @@ export class ClaudeAdapter implements AIProvider {
     this.client = new Anthropic({ apiKey });
   }
 
-  async analizarCaso(entrada: EntradaCanónica): Promise<RespuestaCanónica> {
+  async analizarCaso(entrada: EntradaCanónica, opciones?: { maxTokens?: number }): Promise<RespuestaCanónica> {
     const inicio = Date.now();
 
     // 1. Procesar adjuntos
@@ -221,7 +221,7 @@ export class ClaudeAdapter implements AIProvider {
     try {
       response = await this.client.messages.create({
         model: "claude-sonnet-4-5",
-        max_tokens: 1024,
+        max_tokens: opciones?.maxTokens ?? 1024,
         system: SYSTEM_PROMPT,
         tools: [TOOL_ANALISIS],
         tool_choice: { type: "any" },
@@ -276,7 +276,7 @@ export class ClaudeAdapter implements AIProvider {
       prompt_usado: promptTexto,
       respuesta_raw: response,
       orden_tipo: adjuntosProcesados.length > 0 ? "imagen" as OrdenTipo : "no_aplica" as OrdenTipo,
-      orden_url: entrada.adjuntos[0]?.url ?? null,
+      orden_url: adjuntosProcesados.length > 0 ? adjuntosProcesados[0]!.url : null,
     };
   }
 }

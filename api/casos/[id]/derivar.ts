@@ -29,21 +29,8 @@ import crypto from "node:crypto";
 import { enviarMensajeCallbell } from "../../../src/services/callbell/messagesApi.js";
 import { getSupabaseAdmin } from "../../_lib/supabaseAdmin.js";
 import { auditCerrado } from "../../../src/services/auditService.js";
-
-// -----------------------------------------------------------
-// Constantes
-// -----------------------------------------------------------
-
-/** Prácticas de Medicina Nuclear que requieren derivación a Chiclana (BR-03) */
-const PRACTICAS_NUCLEAR = [
-  "pet_ct",
-  "spect_ct",
-  "centellograma",
-  "perfusion_miocardica",
-  "camara_gamma",
-] as const;
-
-type PracticaNuclear = (typeof PRACTICAS_NUCLEAR)[number];
+import { PRACTICAS_NUCLEAR } from "../../../src/constants.js";
+import type { PracticaNuclear } from "../../../src/constants.js";
 
 /**
  * Número de WhatsApp de la sede Chiclana.
@@ -121,7 +108,7 @@ export default async function handler(req: any, res: any) {
     const contactPhone = caso.contact_phone as string;
 
     // --- 2. Validar que la práctica sea de Medicina Nuclear (BR-03) ---
-    const esNuclear = PRACTICAS_NUCLEAR.includes(tipoPractica as PracticaNuclear);
+    const esNuclear = PRACTICAS_NUCLEAR.includes(tipoPractica as unknown as PracticaNuclear);
 
     if (!esNuclear) {
       console.warn(

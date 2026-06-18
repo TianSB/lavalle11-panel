@@ -10,7 +10,7 @@ import type { AIProvider, EntradaCanónica, RespuestaCanónica } from "./types.j
 export class MockAIProvider implements AIProvider {
   nombre = "mock";
 
-  async analizarCaso(entrada: EntradaCanónica): Promise<RespuestaCanónica> {
+  async analizarCaso(entrada: EntradaCanónica, _opciones?: { maxTokens?: number }): Promise<RespuestaCanónica> {
     await new Promise((r) => setTimeout(r, 50)); // Simular latencia
 
     const tieneAdjuntos = entrada.adjuntos.length > 0;

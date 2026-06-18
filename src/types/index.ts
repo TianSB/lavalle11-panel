@@ -132,6 +132,8 @@ export interface Caso {
   llamadas: Llamada[];
   /** Cantidad de mensajes entrantes acumulados en la conversación */
   mensajes_count: number;
+  /** Cantidad de adjuntos sin procesar por IA (processed_by_ia = false) */
+  adjuntos_pendientes: number;
 }
 
 export interface Usuario {

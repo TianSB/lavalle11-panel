@@ -11,7 +11,8 @@
 import crypto from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload } from "./types.js";
-import type { AdjuntoCanónico, EntradaCanónica, RespuestaCanónica } from "../ai/types.js";
+import type { EntradaCanónica, RespuestaCanónica } from "../ai/types.js";
+import { mapAttachmentsToAdjuntos } from "../ai/buildEntrada.js";
 import { getAIProvider } from "../ai/aiFactory.js";
 import { parsePayload, validatePayload } from "./payloadParser.js";
 import { guardarAdjuntoEnStorage } from "../storage/adjuntosStorage.js";
@@ -32,15 +33,19 @@ import {
 /**
  * Guarda los adjuntos de un mensaje en Supabase Storage y
  * registra las URLs permanentes en la tabla adjuntos.
- * No bloqueante — errores se loggean y se ignoran.
+ *
+ * Retorna las URLs permanentes de Storage que se guardaron exitosamente.
+ * Si falla, retorna array vacío (no bloquea el flujo del webhook).
  */
 async function saveAttachmentsToStorage(
   supabase: SupabaseClient,
   attachments: { url: string; content_type: string | null; file_name: string | null }[],
   casoId: string,
   mensajeUuid: string,
-): Promise<void> {
-  if (!attachments || attachments.length === 0) return;
+): Promise<string[]> {
+  if (!attachments || attachments.length === 0) return [];
+
+  const storageUrls: string[] = [];
 
   for (let i = 0; i < attachments.length; i++) {
     const att = attachments[i]!;
@@ -80,6 +85,7 @@ async function saveAttachmentsToStorage(
         urlPermanente,
       );
     } else {
+      storageUrls.push(urlPermanente);
       console.log(
         "[WEBHOOK] Adjunto guardado en Storage y registrado — caso:",
         casoId,
@@ -87,6 +93,45 @@ async function saveAttachmentsToStorage(
         urlPermanente,
       );
     }
+  }
+
+  return storageUrls;
+}
+
+/**
+ * Actualiza orden_url en extracciones_ia con la primera URL de Storage,
+ * si hay adjuntos recién guardados y el caso no tenía orden_url previa.
+ */
+async function updateOrdenUrlFromStorage(
+  supabase: SupabaseClient,
+  casoId: string,
+  storageUrls: string[],
+): Promise<void> {
+  if (storageUrls.length === 0) return;
+
+  // Solo actualizar si el caso aún no tiene orden_url (o es una URL de Callbell expirada)
+  const { error: updateError } = await supabase
+    .from("extracciones_ia")
+    .update({
+      orden_url: storageUrls[0]!,
+      orden_tipo: "imagen",
+    })
+    .eq("caso_id", casoId);
+
+  if (updateError) {
+    console.warn(
+      "[WEBHOOK] Error al actualizar orden_url con Storage URL:",
+      updateError.message,
+      "— caso:",
+      casoId,
+    );
+  } else {
+    console.log(
+      "[WEBHOOK] orden_url actualizada con Storage URL — caso:",
+      casoId,
+      "url:",
+      storageUrls[0],
+    );
   }
 }
 
@@ -213,14 +258,16 @@ async function handleMessageCreated(
       console.error("[STEP 7.ERR] Error al actualizar historial del caso", existingCaso.id);
     }
 
-    // Guardar adjuntos del nuevo mensaje en Storage (no bloqueante)
+    // Guardar adjuntos del nuevo mensaje en Storage
+    // y actualizar orden_url con URL permanente
     if (message.attachments && message.attachments.length > 0) {
-      saveAttachmentsToStorage(
+      const storageUrls = await saveAttachmentsToStorage(
         supabase,
         message.attachments,
         existingCaso.id,
         message.callbell_uuid,
-      ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+      );
+      await updateOrdenUrlFromStorage(supabase, existingCaso.id, storageUrls);
     }
 
     console.log("[STEP 8] Fin exitoso — caso existente actualizado:", existingCaso.id);
@@ -242,19 +289,7 @@ async function handleMessageCreated(
       return { status: 200, message: "Error al reabrir caso", casoId: existingCaso.id, created: false };
     }
 
-    // Construir adjuntos para el adapter (content_type viene del parser)
-    const adjuntos: AdjuntoCanónico[] = (parsed.message?.attachments ?? [])
-      .map((att) => {
-        const ct = att.content_type ?? "application/octet-stream";
-        return {
-          url: att.url,
-          tipo: ct.startsWith("image/") ? "image" as const
-              : ct === "application/pdf" ? "pdf" as const
-              : "otro" as const,
-          mimeType: ct,
-          nombre: att.file_name ?? undefined,
-        };
-      });
+    const adjuntos = mapAttachmentsToAdjuntos(parsed.message?.attachments ?? []);
 
     const entrada: EntradaCanónica = {
       casoId: existingCaso.id,
@@ -285,14 +320,16 @@ async function handleMessageCreated(
       await actualizarExtraccionIA(supabase, existingCaso.id, analisisIA, parsed);
     }
 
-    // Guardar adjuntos del nuevo mensaje en Storage (no bloqueante)
+    // Guardar adjuntos del nuevo mensaje en Storage
+    // y actualizar orden_url con URL permanente
     if (message.attachments && message.attachments.length > 0) {
-      saveAttachmentsToStorage(
+      const storageUrls = await saveAttachmentsToStorage(
         supabase,
         message.attachments,
         existingCaso.id,
         message.callbell_uuid,
-      ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+      );
+      await updateOrdenUrlFromStorage(supabase, existingCaso.id, storageUrls);
     }
 
     console.log("[STEP 8] Fin exitoso — caso reabierto:", existingCaso.id);
@@ -307,18 +344,7 @@ async function handleMessageCreated(
   // --- RAMA 3: no existe → crear nuevo caso con IA ---
   console.log("[STEP 5] Analizando con IA:", conversationUuid);
 
-  const adjuntos: AdjuntoCanónico[] = (message.attachments ?? [])
-    .map((att) => {
-      const ct = att.content_type ?? "application/octet-stream";
-      return {
-        url: att.url,
-        tipo: ct.startsWith("image/") ? "image" as const
-            : ct === "application/pdf" ? "pdf" as const
-            : "otro" as const,
-        mimeType: ct,
-        nombre: att.file_name ?? undefined,
-      };
-    });
+  const adjuntos = mapAttachmentsToAdjuntos(message.attachments ?? []);
 
   const entrada: EntradaCanónica = {
     casoId: "PENDING",
@@ -349,14 +375,16 @@ async function handleMessageCreated(
 
   console.log("[STEP 6] Resultado createCaso — caso creado:", nuevoCaso.id);
 
-  // Guardar adjuntos del mensaje en Storage (no bloqueante)
+  // Guardar adjuntos del mensaje en Storage
+  // y actualizar orden_url con URL permanente
   if (message.attachments && message.attachments.length > 0) {
-    saveAttachmentsToStorage(
+    const storageUrls = await saveAttachmentsToStorage(
       supabase,
       message.attachments,
       nuevoCaso.id,
       message.callbell_uuid,
-    ).catch((err) => console.warn("[WEBHOOK] Error saving attachments (non-blocking):", err));
+    );
+    await updateOrdenUrlFromStorage(supabase, nuevoCaso.id, storageUrls);
   }
 
   console.log("[STEP 8] Fin exitoso — nuevo caso creado:", nuevoCaso.id);

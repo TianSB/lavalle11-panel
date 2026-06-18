@@ -13,7 +13,7 @@ import { SelectorHora } from "./SelectorHora";
 import { ListaInstrucciones } from "./ListaInstrucciones";
 import { VistaPreviaMensaje } from "./VistaPreviaMensaje";
 import { FormSeguimiento } from "./FormSeguimiento";
-import { TIPOS_CASO } from "../../constants";
+import { TIPOS_CASO, PRACTICAS_NUCLEAR } from "../../constants";
 import { formatDateTime } from "../../utils/dates";
 
 // -----------------------------------------------------------
@@ -102,10 +102,17 @@ export function CaseModal({
   // --- Derivar dialog state ---
   const [derivarNotas, setDerivarNotas] = useState("");
 
-  // --- Reset state on new case ---
-  const prevCasoIdRef = useRef(caso?.id);
-  if (caso && caso.id !== prevCasoIdRef.current) {
-    prevCasoIdRef.current = caso.id;
+  // --- Reset form state when switching to a new case ---
+  // useEffect en lugar de bloque condicional en el cuerpo del componente
+  // para evitar renderizados inconsistentes en React 19 StrictMode.
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    // Skip the first render (prevent reset on mount)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
     setSelectedSede("lavalle11");
     setSelectedDate("");
     setSelectedTime("09:00");
@@ -121,7 +128,7 @@ export function CaseModal({
     setSelectedClosingReason("");
     setCloseNota("");
     setDerivarNotas("");
-  }
+  }, [caso?.id])
 
   const toggleInstruccion = useCallback((inst: Instruccion) => {
     setSelectedInstrucciones((prev) =>
@@ -257,8 +264,8 @@ export function CaseModal({
   const isPendiente = caso.asesor_id === null;
   const tipoCasoLabel = TIPOS_CASO[caso.tipo_caso] ?? null;
   const esCerrado = caso.estado === "cerrado";
-  const esNuclear = ["pet_ct", "spect_ct", "centellograma", "perfusion_miocardica", "camara_gamma"].includes(
-    caso.extraccion_ia.tipo_practica,
+  const esNuclear = PRACTICAS_NUCLEAR.includes(
+    caso.extraccion_ia.tipo_practica as any,
   );
 
   return (

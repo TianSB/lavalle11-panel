@@ -21,7 +21,9 @@
 
 import { getSupabaseAdmin } from "../../_lib/supabaseAdmin.js";
 import { getAIProvider } from "../../../src/services/ai/aiFactory.js";
-import type { EntradaCanónica, RespuestaCanónica, AdjuntoCanónico } from "../../../src/services/ai/types.js";
+import type { RespuestaCanónica } from "../../../src/services/ai/types.js";
+import { buildEntradaDesdeHistorial } from "../../../src/services/ai/buildEntrada.js";
+import { PRACTICAS_NUCLEAR } from "../../../src/constants.js";
 
 // -----------------------------------------------------------
 // Flags helper (versión simplificada sin depender de ParsedPayload)
@@ -36,8 +38,7 @@ function buildReanalysisFlags(analisis: RespuestaCanónica): string[] {
   if (analisis.obra_social?.toLowerCase().includes("ioma")) {
     flags.add("token_ioma");
   }
-  const practicasNuclear = ["pet_ct", "spect_ct", "centellograma", "perfusion_miocardica", "camara_gamma"];
-  if (analisis.tipo_practica && practicasNuclear.includes(analisis.tipo_practica)) {
+  if (analisis.tipo_practica && PRACTICAS_NUCLEAR.includes(analisis.tipo_practica as any)) {
     flags.add("chiclana");
   }
   if (analisis.campos_baja_confianza.length > 0) {
@@ -96,93 +97,38 @@ export default async function handler(req: any, res: any) {
     const contactPhone = caso.contact_phone as string;
     const conversationUuid = caso.callbell_conversation_uuid as string;
 
-    // --- 2. Obtener todos los mensajes entrantes + adjuntos ---
-    const { data: mensajes, error: msgError } = await supabase
-      .from("mensajes")
-      .select("id, content, callbell_created_at")
-      .eq("caso_id", id)
-      .eq("direction", "inbound")
-      .order("callbell_created_at", { ascending: true });
+    // --- 2-3. Construir EntradaCanónica con historial completo (helper compartido) ---
+    const entrada = await buildEntradaDesdeHistorial(
+      supabase,
+      id,
+      conversationUuid,
+      contactName,
+      contactPhone,
+    );
 
-    if (msgError) {
-      console.error("[RE-ANALIZAR] Error al obtener mensajes:", msgError.message);
-      res.status(500).json({ ok: false, error: "Error al leer mensajes del caso" });
+    if (!entrada) {
+      console.error("[RE-ANALIZAR] No se pudo construir la entrada para el caso:", id);
+      res.status(500).json({ ok: false, error: "No se encontraron mensajes para re-analizar" });
       return;
     }
 
-    // --- 2b. Obtener adjuntos del Storage (URLs permanentes, no expiran) ---
-    // Solo los que no han sido procesados aún por IA
+    // Obtener adjuntos para marcarlos como procesados después del análisis
     const { data: adjuntosRaw, error: adjError } = await supabase
       .from("adjuntos")
-      .select("file_url, file_type, file_name")
+      .select("file_url")
       .eq("caso_id", id)
-      .eq("processed_by_ia", false)
-      .order("created_at", { ascending: true });
+      .eq("processed_by_ia", false);
 
     if (adjError) {
-      console.warn("[RE-ANALIZAR] Error al obtener adjuntos:", adjError.message);
+      console.warn("[RE-ANALIZAR] Error al obtener adjuntos para marcar:", adjError.message);
     }
 
-    // --- 3. Construir historial de texto completo ---
-    const mensajesTexto = (mensajes ?? [])
-      .map((m) => {
-        const ts = m.callbell_created_at
-          ? new Date(m.callbell_created_at).toLocaleString("es-AR")
-          : "—";
-        return `[${ts}] ${m.content}`;
-      })
-      .join("\n\n");
-
-    // Construir adjuntos canónicos desde los registros de adjuntos
-    const adjuntosCanonicos: AdjuntoCanónico[] = (adjuntosRaw ?? [])
-      .filter((a) => a.file_url)
-      .map((a) => {
-        const ft = (a.file_type as string) ?? "application/octet-stream";
-        return {
-          url: a.file_url as string,
-          tipo: ft.startsWith("image/") ? ("image" as const)
-            : ft === "application/pdf" ? ("pdf" as const)
-            : ("otro" as const),
-          mimeType: ft,
-          nombre: (a.file_name as string) ?? undefined,
-        };
-      });
-
-    // Si no hay adjuntos en Storage, intentar desde la URL de orden en extracciones_ia
-    // (casos anteriores a la implementación de Storage)
-    const extraccion = caso.extracciones_ia as Record<string, unknown> | null;
-    const ordenUrl = extraccion?.orden_url as string | null;
-    if (adjuntosCanonicos.length === 0 && ordenUrl) {
-      adjuntosCanonicos.push({
-        url: ordenUrl,
-        tipo: "image" as const,
-        mimeType: "image/jpeg",
-      });
-    }
-
-    console.log(
-      "[RE-ANALIZAR] Historial construido —",
-      "mensajes:", (mensajes ?? []).length,
-      "adjuntos:", adjuntosCanonicos.length,
-      "texto:", mensajesTexto.length, "chars",
-    );
-
-    // --- 4. Construir EntradaCanónica y llamar a Claude ---
-    const entrada: EntradaCanónica = {
-      casoId: id,
-      conversationUuid,
-      textoMensaje: mensajesTexto || "Mensaje sin texto",
-      adjuntos: adjuntosCanonicos,
-      contactoNombre: contactName,
-      contactoTelefono: contactPhone,
-      timestamp: new Date().toISOString(),
-    };
-
+    // --- 4. Llamar a Claude con maxTokens 2048 para análisis completo ---
     let analisis: RespuestaCanónica;
     try {
       const provider = getAIProvider();
       console.log("[RE-ANALIZAR] Invocando IA — provider:", provider.nombre);
-      analisis = await provider.analizarCaso(entrada);
+      analisis = await provider.analizarCaso(entrada, { maxTokens: 2048 });
       console.log(
         "[RE-ANALIZAR] Análisis completado —",
         "tipo:", analisis.tipo_caso,

@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedPayload, ParsedMessage, ParsedContact } from "../callbell/types.js";
 import type { RespuestaCanónica } from "../ai/types.js";
 import { auditCasoCreado } from "../auditService.js";
+import { PRACTICAS_NUCLEAR } from "../../constants.js";
 
 // -----------------------------------------------------------
 // Constants
@@ -222,8 +223,7 @@ export function buildFlags(
   if (analisis?.obra_social?.toLowerCase().includes("ioma")) {
     flags.add("token_ioma");
   }
-  const practicasNuclear = ["pet_ct", "spect_ct", "centellograma", "perfusion_miocardica", "camara_gamma"];
-  if (analisis?.tipo_practica && practicasNuclear.includes(analisis.tipo_practica)) {
+  if (analisis?.tipo_practica && PRACTICAS_NUCLEAR.includes(analisis.tipo_practica as any)) {
     flags.add("chiclana");
   }
   if (parsed.message?.has_misrx_link) {
