@@ -73,7 +73,7 @@ async function saveAttachmentsToStorage(
         file_url: urlPermanente,
         file_type: att.content_type ?? "image/jpeg",
         file_name: att.file_name ?? `orden_${i + 1}.jpg`,
-        mensaje_id: mensajeUuid,
+        mensaje_id: null,
         processed_by_ia: false,
       });
 
